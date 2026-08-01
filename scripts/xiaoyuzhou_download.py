@@ -11,9 +11,7 @@ import re
 import sys
 from html.parser import HTMLParser
 from pathlib import Path
-
-import requests
-from bs4 import BeautifulSoup
+from urllib.request import Request, urlopen
 
 
 class NextDataParser(HTMLParser):
@@ -34,6 +32,33 @@ class NextDataParser(HTMLParser):
     def handle_endtag(self, tag):
         if self.capture and tag == 'script':
             self.capture = False
+
+
+class HTMLTextParser(HTMLParser):
+    """Small shownotes-to-text converter; avoids a BeautifulSoup dependency."""
+
+    BLOCK_TAGS = {"br", "p", "div", "li", "h1", "h2", "h3", "h4", "blockquote"}
+
+    def __init__(self):
+        super().__init__()
+        self.parts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self.BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in self.BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_data(self, data):
+        self.parts.append(data)
+
+    def text(self):
+        value = "".join(self.parts)
+        value = re.sub(r"[ \t]+", " ", value)
+        value = re.sub(r"\n\s*\n+", "\n\n", value)
+        return value.strip()
 
 
 def sanitize_filename(name):
@@ -99,9 +124,9 @@ def extract_podcast_data(html_content):
 
 def fetch_html(url, headers=None):
     """Fetch a URL and return response text."""
-    resp = requests.get(url, headers=headers, timeout=30)
-    resp.raise_for_status()
-    return resp.text
+    request = Request(url, headers=headers or {"User-Agent": "podcast-summary/1.0"})
+    with urlopen(request, timeout=30) as response:
+        return response.read().decode("utf-8", errors="replace")
 
 
 def get_episode_ids_from_podcast(podcast_url):
@@ -175,25 +200,21 @@ def audio_filename(short_title: str, ext: str) -> str:
 def download_audio(url: str, output_path: Path) -> None:
     """Download audio file with progress indicator."""
     print(f"Downloading audio from {url}")
-    import urllib3
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    response = requests.get(url, stream=True, timeout=120, verify=False)
-    response.raise_for_status()
-
-    total_size = int(response.headers.get('content-length', 0))
-    with open(output_path, 'wb') as f:
+    request = Request(url, headers={"User-Agent": "podcast-summary/1.0"})
+    with urlopen(request, timeout=120) as response, open(output_path, "wb") as f:
+        total_size = int(response.headers.get("content-length", 0))
         downloaded = 0
-        for chunk in response.iter_content(chunk_size=8192):
+        while chunk := response.read(1024 * 1024):
             f.write(chunk)
             downloaded += len(chunk)
             if total_size:
-                print(f"\rProgress: {downloaded/total_size*100:.1f}%", end='')
+                print(f"\rProgress: {downloaded/total_size*100:.1f}%", end="")
     print("\nDownload complete")
 
 
 
 
-def process_episode(episode, base_output_dir, no_transcribe=False):
+def process_episode(episode, base_output_dir, no_transcribe=False, metadata_only=False):
     """
     Download audio + save README for one episode dict.
     Returns the output directory path.
@@ -221,7 +242,8 @@ def process_episode(episode, base_output_dir, no_transcribe=False):
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Save README
-    soup = BeautifulSoup(shownotes, 'html.parser')
+    shownotes_parser = HTMLTextParser()
+    shownotes_parser.feed(shownotes)
     # Format publish date (ISO → YYYY-MM-DD)
     pub_date_str = ''
     if pub_date:
@@ -230,10 +252,14 @@ def process_episode(episode, base_output_dir, no_transcribe=False):
     if pub_date_str:
         readme_header += f"> 发布日期：{pub_date_str}\n"
     readme_header += f"> Audio URL: {audio_url}\n\n"
-    readme_content = readme_header + soup.get_text(separator=chr(10))
+    readme_content = readme_header + shownotes_parser.text()
     readme_path = output_dir / 'README.md'
     readme_path.write_text(readme_content, encoding='utf-8')
     print(f"README saved: {readme_path}")
+
+    if metadata_only:
+        print(f"✓ Episode complete: {output_dir}")
+        return output_dir
 
     # Download audio
     # First download to a temp name, then rename to {prefix}-{hash8}.{ext}
@@ -294,6 +320,11 @@ Examples:
         help='Skip audio transcription',
     )
     parser.add_argument(
+        '--metadata-only',
+        action='store_true',
+        help='Write README with the public Audio URL, but do not download audio',
+    )
+    parser.add_argument(
         '--list-only',
         action='store_true',
         help='Only list matching episodes, do not download',
@@ -307,7 +338,7 @@ Examples:
         with open(args.local, 'r', encoding='utf-8') as f:
             html_content = f.read()
         episode = extract_episode_data(html_content)
-        process_episode(episode, base_output_dir, no_transcribe=args.no_transcribe)
+        process_episode(episode, base_output_dir, no_transcribe=args.no_transcribe, metadata_only=args.metadata_only)
         return
 
     if not args.url:
@@ -319,7 +350,7 @@ Examples:
     if '/episode/' in url:
         html_content = fetch_html(url)
         episode = extract_episode_data(html_content)
-        process_episode(episode, base_output_dir, no_transcribe=args.no_transcribe)
+        process_episode(episode, base_output_dir, no_transcribe=args.no_transcribe, metadata_only=args.metadata_only)
         return
 
     # ── Podcast (channel) URL ─────────────────────────────────────────────────
@@ -353,7 +384,7 @@ Examples:
 
         for i, episode in enumerate(matched, 1):
             print(f"\n[{i}/{len(matched)}] Processing: {episode['title']}")
-            process_episode(episode, base_output_dir, no_transcribe=args.no_transcribe)
+            process_episode(episode, base_output_dir, no_transcribe=args.no_transcribe, metadata_only=args.metadata_only)
 
         print(f"\n✓ All done. Output dir: {base_output_dir}")
         return

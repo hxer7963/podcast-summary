@@ -15,7 +15,7 @@
 
 Usage:
   # 直接传 audio URL
-  python3 scripts/volc_asr.py --audio-url https://example.com/ep.mp3 --episode-dir audios/foo/ep1
+  python3 scripts/volc_asr.py --audio-url https://example.com/ep.mp3
 
   # 从 episode_dir/README.md 的 "> Audio URL:" 行解析 URL
   python3 scripts/volc_asr.py --episode-dir audios/foo/ep1
@@ -36,6 +36,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -43,9 +44,9 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from urllib.parse import urlparse
-
-import httpx
+from urllib.error import HTTPError, URLError
+from urllib.parse import unquote, urlparse
+from urllib.request import Request, urlopen
 
 # ── 火山引擎 AUC 大模型 ASR (v3) ──────────────────────────────────────────────
 SUBMIT_URL = "https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit"
@@ -67,6 +68,7 @@ MIN_TRANSCRIPT_BYTES = 100
 
 # README.md 中 audio URL 的标记行
 _AUDIO_URL_RE = re.compile(r"^>\s*Audio URL:\s*(\S+)\s*$", re.MULTILINE)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 def log(msg: str) -> None:
@@ -112,8 +114,35 @@ def _headers(api_key: str, request_id: str, *, is_submit: bool) -> dict[str, str
     return h
 
 
+def _post_json(url: str, headers: dict[str, str], payload: dict) -> tuple[dict[str, str], bytes]:
+    """POST JSON with the standard library and return lowercase headers + body."""
+    request = Request(
+        url,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers=headers,
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=60) as response:
+            return {key.lower(): value for key, value in response.headers.items()}, response.read()
+    except HTTPError as exc:
+        body = exc.read(500).decode("utf-8", errors="replace")
+        raise RuntimeError(f"HTTP {exc.code}: {body or exc.reason}") from exc
+    except URLError as exc:
+        raise RuntimeError(f"network error: {exc.reason}") from exc
+
+
+def _decode_json(body: bytes) -> dict:
+    if not body:
+        return {}
+    try:
+        value = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"invalid JSON response: {body[:500]!r}") from exc
+    return value if isinstance(value, dict) else {"data": value}
+
+
 def submit_task(
-    client: httpx.Client,
     api_key: str,
     audio_url: str,
     *,
@@ -139,50 +168,43 @@ def submit_task(
             "sensitive_words_filter": "",
         },
     }
-    resp = client.post(
+    headers, body = _post_json(
         SUBMIT_URL,
-        headers=_headers(api_key, request_id, is_submit=True),
-        json=payload,
+        _headers(api_key, request_id, is_submit=True),
+        payload,
     )
-    resp.raise_for_status()
     # 火山 v3: 成功标志在响应头 X-Api-Status-Code, body 可能为空 {}
-    code = resp.headers.get("X-Api-Status-Code", "")
+    code = headers.get("x-api-status-code", "")
     if code != CODE_SUCCESS:
-        body_preview = resp.text[:500] if resp.text else "(empty)"
+        body_preview = body[:500].decode("utf-8", errors="replace") or "(empty)"
         raise RuntimeError(
             f"submit failed: status={code or '(missing)'} "
-            f"message={resp.headers.get('X-Api-Status-Message', '(none)')} "
+            f"message={headers.get('x-api-message', headers.get('x-api-status-message', '(none)'))} "
             f"body={body_preview}"
         )
     return request_id
 
 
 def query_task(
-    client: httpx.Client,
     api_key: str,
     request_id: str,
 ) -> dict:
     """查询任务状态,返回原始 JSON。"""
-    resp = client.post(
+    headers, body = _post_json(
         QUERY_URL,
-        headers=_headers(api_key, request_id, is_submit=False),
-        json={},
+        _headers(api_key, request_id, is_submit=False),
+        {},
     )
-    resp.raise_for_status()
     # 火山 v3: 状态码在响应头, body 可能为空 (运行中)
-    code = resp.headers.get("X-Api-Status-Code", "")
+    code = headers.get("x-api-status-code", "")
     if code and code != CODE_SUCCESS and code not in (CODE_RUNNING_1, CODE_RUNNING_2, CODE_SILENT):
-        body_preview = resp.text[:500] if resp.text else "(empty)"
+        body_preview = body[:500].decode("utf-8", errors="replace") or "(empty)"
         raise RuntimeError(
             f"query failed: status={code} "
-            f"message={resp.headers.get('X-Api-Status-Message', '(none)')} "
+            f"message={headers.get('x-api-message', headers.get('x-api-status-message', '(none)'))} "
             f"body={body_preview}"
         )
-    # 尝试解析 body; 运行中时 body 可能为空
-    try:
-        data = resp.json()
-    except Exception:
-        return {"code": code, "_raw_text": resp.text}
+    data = _decode_json(body)
     # 把响应头状态码注入到 data 里, poll_until_done 优先读它
     if isinstance(data, dict) and "code" not in data:
         data["code"] = code
@@ -236,7 +258,6 @@ def extract_text(data: dict) -> str:
 
 
 def poll_until_done(
-    client: httpx.Client,
     api_key: str,
     request_id: str,
     *,
@@ -247,7 +268,7 @@ def poll_until_done(
     deadline = time.monotonic() + max_wait
     last_code = ""
     while time.monotonic() < deadline:
-        data = query_task(client, api_key, request_id)
+        data = query_task(api_key, request_id)
         code = str(data.get("code", ""))
         last_code = code
         if code == CODE_SUCCESS:
@@ -299,18 +320,38 @@ def transcribe_one(
     request_id = str(uuid.uuid4())
     log(f"submitting audio_url={audio_url} request_id={request_id}")
 
-    with httpx.Client(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
-        # submit 可能因为 request_id 重复而返回错误,这里用新生成的 id 理论上不会冲突
-        submit_task(client, api_key, audio_url, request_id=request_id)
-        log(f"submitted, polling every {poll_interval}s (max {max_wait}s) ...")
-        text = poll_until_done(
-            client, api_key, request_id,
-            poll_interval=poll_interval, max_wait=max_wait,
-        )
+    submit_task(api_key, audio_url, request_id=request_id)
+    log(f"submitted, polling every {poll_interval}s (max {max_wait}s) ...")
+    text = poll_until_done(
+        api_key, request_id,
+        poll_interval=poll_interval, max_wait=max_wait,
+    )
 
     out = write_transcript(ep_dir, text, audio_url=audio_url, request_id=request_id)
     log(f"transcript written: {out} ({len(text)} chars)")
     return out
+
+
+def default_episode_dir(audio_url: str) -> Path:
+    parsed = urlparse(audio_url)
+    filename = unquote(Path(parsed.path).stem) or "audio"
+    slug = re.sub(r"[^\w\u3400-\u4dbf\u4e00-\u9fff.-]+", "-", filename).strip("-.")
+    slug = (slug or "audio")[:64]
+    digest = hashlib.sha256(audio_url.encode("utf-8")).hexdigest()[:10]
+    root = Path(os.environ.get("PODCAST_OUTPUT_DIR", PROJECT_ROOT / "audios"))
+    return (root / "cloud" / f"{slug}-{digest}").expanduser().resolve()
+
+
+def ensure_readme(ep_dir: Path, audio_url: str, title: str | None) -> None:
+    readme = ep_dir / "README.md"
+    if readme.exists():
+        return
+    readme.write_text(
+        f"# {title or unquote(Path(urlparse(audio_url).path).name) or 'Audio'}\n\n"
+        f"> Audio URL: {audio_url}\n"
+        f"> Source: direct public audio URL\n",
+        encoding="utf-8",
+    )
 
 
 def main() -> int:
@@ -318,7 +359,8 @@ def main() -> int:
         description="Transcribe audio URL via Volcengine AUC bigmodel ASR.",
     )
     ap.add_argument("--audio-url", help="音频公网 URL (如未指定则从 episode-dir/README.md 解析)")
-    ap.add_argument("--episode-dir", required=True, help="输出 transcript.md 的目录")
+    ap.add_argument("--episode-dir", help="输出目录；直接传 audio URL 时可省略")
+    ap.add_argument("--title", help="直接 audio URL 模式下写入 README 的标题")
     ap.add_argument("--poll-interval", type=int, default=DEFAULT_POLL_INTERVAL, help=f"轮询间隔秒 (默认 {DEFAULT_POLL_INTERVAL})")
     ap.add_argument("--max-wait", type=int, default=DEFAULT_MAX_WAIT, help=f"最大等待秒 (默认 {DEFAULT_MAX_WAIT})")
     args = ap.parse_args()
@@ -328,10 +370,15 @@ def main() -> int:
         err("VOLC_ASR_API_KEY environment variable is not set")
         return 1
 
-    ep_dir = Path(args.episode_dir).expanduser().resolve()
-    if not ep_dir.is_dir():
-        err(f"episode_dir does not exist: {ep_dir}")
+    if not args.audio_url and not args.episode_dir:
+        err("provide --audio-url or --episode-dir")
         return 1
+
+    ep_dir = (
+        Path(args.episode_dir).expanduser().resolve()
+        if args.episode_dir else default_episode_dir(args.audio_url)
+    )
+    ep_dir.mkdir(parents=True, exist_ok=True)
 
     # 幂等: 已有非空 transcript.md 则跳过
     transcript_path = ep_dir / "transcript.md"
@@ -351,6 +398,7 @@ def main() -> int:
     if parsed.scheme not in ("http", "https"):
         err(f"audio_url must be http/https, got: {audio_url}")
         return 1
+    ensure_readme(ep_dir, audio_url, args.title)
 
     try:
         out = transcribe_one(

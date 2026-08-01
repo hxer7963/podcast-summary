@@ -1,8 +1,6 @@
 ---
 name: podcast-summary
 description: 基于完整 transcript.md + README.md 生成覆盖充分、娓娓道来、证据扎实且有底层思考的中文纪要 {basename}.md，同时支持播客 episode_dir 和文章 article_dir。保留 TL;DR、核心结论、隐含推理的高密度开头，以话题覆盖账本防漏项，以访谈问答和具体故事组织详尽内容，最后逐章回望并总结升华。当用户说"生成纪要""做播客 summary""写 podcast 总结""summarize this episode""summarize this article"时使用。
-model: glm-5.1
-context: fork
 ---
 
 # podcast-summary

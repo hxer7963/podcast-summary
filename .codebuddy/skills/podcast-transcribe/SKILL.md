@@ -1,7 +1,6 @@
 ---
 name: podcast-transcribe
 description: 用 vibevoice-asr 转录播客音频，输出带 speaker 标签的 transcript.md。处理 >100 分钟的长播客（自动 ffmpeg 切片 + 合并）。当用户说"转录播客"、"转录这一集"、"做 ASR"、"transcribe podcast"、或拿到一个含音频的 episode_dir 要求出文字稿时使用。
-version: 1.0.0
 ---
 
 # podcast-transcribe
@@ -55,7 +54,7 @@ bash vibevoice-asr/serve_vllm.sh stop      # 停止
 
 2. **GPU 串行**：`--dp 4` 占用全部 4 块 GPU，所以**多个 episode_dir 串行处理**，不要并行
 
-3. **统一 venv**：所有 Python 依赖统一在 `$PODCAST_SUMMARY_ROOT/.venv`，`transcribe.sh` 内部已自动 source，调用方不用管。可通过 `PODCAST_SUMMARY_VENV` / `PODCAST_SUMMARY_VENV_PY` 环境变量覆盖到共享 venv。
+3. **环境隔离**：默认 vLLM 后端运行在专用 Docker 容器，不把 CUDA/Torch 依赖装进 hub 的可选 fetch/subtitle 环境。legacy PyTorch 后端才读取 `$PODCAST_SUMMARY_VENV` / `$PODCAST_SUMMARY_VENV_PY`。
 
 4. **音频路径不能含特殊 shell 字符**（`xiaoyuzhou_download.py` 的 sanitize 已保证）
 

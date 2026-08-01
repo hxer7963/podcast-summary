@@ -19,7 +19,15 @@ Turns a podcast or video URL into a standalone Chinese deep-summary markdown fil
 
 Your AI agent (Codex / Claude Code / CodeBuddy) will clone the repo, run `install.sh`, and auto-discover the 9 skills. No programming needed.
 
-`install.sh` only installs lightweight Python deps (~50MB). It does **not** download the 20GB model/Docker image — those are lazy-loaded later only when local GPU ASR is actually needed.
+`install.sh` is a **zero-package install** by default: it does not install uv, Python packages, ffmpeg, Docker images, or models. Skill discovery and summary are agent-native; the minimal Volcengine transport uses the commonly available `curl`. Python 3.10+ is only for optional helpers, not hub installation.
+
+With `VOLC_ASR_API_KEY` and a public audio URL, transcribe immediately:
+
+```bash
+bash scripts/volc_asr.sh run 'https://example.com/episode.mp3' 'audios/cloud/my-episode'
+```
+
+The script creates the `episode_dir`, `README.md`, and raw Volcengine result. If `jq` already exists it also writes `transcript.md`; otherwise the agent extracts `result.text` from `volc-response.json` without installing another tool. RSS/Apple/Spotify fetching and video subtitles are installed only when their route is needed.
 
 **One sentence to use** — tell your AI agent:
 
@@ -29,6 +37,8 @@ The agent runs the full pipeline: fetch → transcribe → summary. ASR backend 
 - Official transcript/subtitle first (zero cost)
 - Cloud ASR if `VOLC_ASR_API_KEY` is set (no GPU needed)
 - Local GPU ASR as fallback — **with user confirmation before downloading ~20GB** (see below)
+
+`bash scripts/check_capabilities.sh --json` gives the agent a zero-package capability report so it selects only a ready or genuinely needed route.
 
 </details>
 
@@ -92,7 +102,7 @@ URL
  │   ├─ 0b. YouTube/Bilibili official subtitles (subtitle-fetch)
  │   └─ 0c. RSS/xiaoyuzhou/Apple/Spotify official transcript (podcast-fetch internal probe)
  │
- ├─ Level 1: Volcengine cloud ASR (downloads audio, no GPU needed)
+ ├─ Level 1: Volcengine cloud ASR (passes public audio URL, no local download/GPU)
  │   └─ volcengine-asr (VOLC_ASR_API_KEY)
  │
  └─ Level 2: Local GPU ASR (fallback, needs GPU)
@@ -152,8 +162,8 @@ podcast-summary/
 │   ├── architecture.md                   # Multi-tier source fetching structure
 │   ├── volcengine-asr-setup.md          # Volcengine cloud ASR setup
 │   └── vibevoice-local-setup.md         # Local GPU ASR deployment
-├── pyproject.toml                        # Base deps (uv)
-├── requirements-asr.txt                  # GPU ASR deps (optional)
+├── pyproject.toml                        # Optional fetch/subtitle dependency groups
+├── requirements-asr.txt                  # Legacy GPU ASR deps (optional)
 ├── .gitignore
 ├── LICENSE
 └── README.md

@@ -155,7 +155,7 @@ def fetch_feed_episodes(feed_url: str, podcast_name: str) -> list[dict]:
 
 # ── Download ──────────────────────────────────────────────────────────────────
 
-def download_rss_episode(episode: dict, output_dir: Path) -> Path | None:
+def download_rss_episode(episode: dict, output_dir: Path, *, metadata_only: bool = False) -> Path | None:
     """Download one RSS episode audio + write README.md.
 
     Official transcript is probed first (RSS <podcast:transcript> tag /
@@ -194,6 +194,10 @@ def download_rss_episode(episode: dict, output_dir: Path) -> Path | None:
     if not audio_url:
         print(f"  [skip] No audio URL and no official transcript for: {title}")
         return None
+
+    if metadata_only:
+        print(f"✓ Episode complete: {ep_dir}")
+        return ep_dir
 
     ext = _ext_from_url(audio_url)
 

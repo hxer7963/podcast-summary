@@ -57,13 +57,14 @@ podcast-summary 支持多级信源抓取，按**成本从低到高**的优先级
 - **适用**：播客在 RSS feed 里附带了官方 transcript（如 Lex Fridman）
 - **未命中**：进入 Level 1
 
-### Level 1：火山云 ASR（需下载音频，不需 GPU）
+### Level 1：火山云 ASR（只传公网 URL，不下载音频，不需 GPU）
 
 - **条件**：环境变量 `VOLC_ASR_API_KEY` 已设置
 - **子 skill**：`volcengine-asr`
-- **脚本**：`scripts/volc_asr.py`
-- **成本**：API 调用费用（按音频时长，典型 60 分钟约 ¥0.5-¥2）
+- **脚本**：`scripts/volc_asr.sh`（curl-only）或可选 `scripts/volc_asr.py`
+- **成本**：按火山引擎控制台当前套餐与音频时长计费
 - **输入**：音频公网 URL（从 `episode_dir/README.md` 的 `> Audio URL:` 行解析）
+- **本地环境**：最小路径只需 Bash + curl；不需要 Python、uv、httpx、ffmpeg
 - **输出**：`transcript.md`（纯文本，无 speaker 标签）
 - **适用**：不想占用本地 GPU，或没有 GPU
 - **配置**：见 `docs/volcengine-asr-setup.md`
@@ -88,7 +89,7 @@ podcast-summary 支持多级信源抓取，按**成本从低到高**的优先级
 | 0a | PodcastTranscript | 否 | 否 | 否 | <10s | 无 | 是 |
 | 0b | subtitle-fetch | 否 | 否 | 否 | <30s | 无 | 人工否，AI 是 |
 | 0c | RSS 官方 transcript | 否 | 否 | 否 | <10s | 无 | 是 |
-| 1 | 火山云 ASR | 是 | 否 | 是 | 2-10min | 无 | 否 |
+| 1 | 火山云 ASR | 否 | 否 | 是 | 2-10min | 无 | 否 |
 | 2 | 本地 GPU ASR | 是 | 是 | 否 | 5-30min | 有 | 是 |
 
 ## URL 自动路由
@@ -113,7 +114,7 @@ podcast-summary 支持多级信源抓取，按**成本从低到高**的优先级
 ```
 episode_dir/
 ├── README.md           # shownotes / 元数据
-├── *.m4a / *.mp3       # 音频文件（Level 0/1 可能没有）
+├── *.m4a / *.mp3       # 音频文件（仅 Level 2 本地 ASR 需要）
 ├── transcript.md       # 文字稿（所有路径最终产出）
 ├── {basename}.md       # 中文深度纪要（podcast-summary 产出）
 └── (可选) source.json, subtitle_status.json, asr-required.json, tags.json
@@ -154,9 +155,12 @@ episode_dir/
 
 | 阶段 | 环境 | CUDA | 说明 |
 |---|---|---|---|
-| 字幕抓取 | `uv run --group subtitle` | 无 | yt-dlp + 标准 Python 库，macOS/Linux 通用 |
-| 普通音频抓取 | 项目 venv | 无 | requests + feedparser + bs4 |
-| 火山云 ASR | 项目 venv | 无 | httpx |
-| 本地 GPU ASR | 项目 venv + requirements-asr.txt | 是 | torch + transformers + vLLM |
+| Skill/summary/能力检测 | Python 3.10+ 标准库 | 无 | 默认安装 0 个包 |
+| 小宇宙元数据/Audio URL | Python 3.10+ 标准库 | 无 | 云端路径不下载音频 |
+| 火山云 ASR | Bash + curl | 无 | Python/jq 均为可选，不安装 |
+| PodcastTranscript | Python 3.10+ 标准库 | 无 | 不需要 uv 或 ffmpeg |
+| RSS/Apple/Spotify | `uv run --group fetch` | 无 | 仅收到对应 URL 时安装 |
+| 字幕抓取 | `uv run --group subtitle` | 无 | 仅视频 URL 使用；纯字幕无需 ffmpeg |
+| 本地 GPU ASR | 专用 Docker | 是 | 仅检测到 GPU 且用户确认后懒加载 |
 
 **禁止**在 Intel Mac 或无 GPU 的机器上安装 `requirements-asr.txt`（含 CUDA 依赖）。

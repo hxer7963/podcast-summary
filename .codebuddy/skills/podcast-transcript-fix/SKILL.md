@@ -1,7 +1,6 @@
 ---
 name: podcast-transcript-fix
 description: 校验和修正 vibevoice-asr 输出的 transcript.md，重点处理英文专有名词、技术术语、中英混杂被识别成相近发音中文等 ASR 常见错误。原地写回 transcript.md。当用户说"修正转录"、"校验 transcript"、"修 ASR 错误"、"fix transcript"、"transcript 校对"，或在生成纪要前先要把转录文本提质时使用。
-version: 1.0.0
 ---
 
 # podcast-transcript-fix

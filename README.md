@@ -19,7 +19,15 @@ Agent 友好的播客流水线：**抓取 → 转录（本地 GPU 或云端 ASR�
 
 AI 助手（Codex / Claude Code / CodeBuddy）会自动 clone 仓库、运行 `install.sh`、发现 9 个 skill。无需编程知识。
 
-`install.sh` 只安装轻量 Python 依赖（~50MB），**不会**下载 20GB 的模型和镜像——这些在真正需要本地 GPU 转录时才懒加载。
+`install.sh` 默认是**零包安装**：不安装 uv、Python 包、ffmpeg、Docker 镜像或模型。Skill 发现和纪要由 agent 原生完成；火山云最小通信层只使用系统常见的 `curl`。Python 3.10+ 仅用于可选的抓取/自动轮询助手，不是 hub 的安装前提。
+
+提供 `VOLC_ASR_API_KEY` 和一个公网音频 URL 后，可以直接运行：
+
+```bash
+bash scripts/volc_asr.sh run 'https://example.com/episode.mp3' 'audios/cloud/my-episode'
+```
+
+脚本会创建 `episode_dir`、`README.md` 和火山原始结果；若本机已有 `jq` 会同时写 `transcript.md`，否则 agent 直接从 `volc-response.json` 提取 `result.text`，不为此安装新工具。RSS/Apple/Spotify 抓取和视频字幕依赖只在对应路径首次需要时安装：`bash install.sh --with-fetch` 或 `bash install.sh --with-subtitle`。
 
 **一句话使用** — 跟你的 AI 助手说：
 
@@ -29,6 +37,8 @@ Agent 自动运行完整流水线：抓取 → 转录 → 纪要。ASR 后端自
 - 优先官方字幕/文稿（零成本）
 - 设了 `VOLC_ASR_API_KEY` 则走火山云（无需 GPU）
 - 兜底走本地 GPU ASR——**下载前会告知大小和性能，征求用户确认**
+
+用 `bash scripts/check_capabilities.sh --json` 可以让 agent 在零包环境读取本机能力，并只选择已经就绪或确实需要的路径。
 
 </details>
 
@@ -92,7 +102,7 @@ URL
  │   ├─ 0b. YouTube/Bilibili 官方字幕 (subtitle-fetch)
  │   └─ 0c. RSS/小宇宙/Apple/Spotify 官方 transcript (podcast-fetch 内部 probe)
  │
- ├─ Level 1: 火山云 ASR (需下载音频, 不需 GPU)
+ ├─ Level 1: 火山云 ASR (传公网 audio URL, 不下载音频, 不需 GPU)
  │   └─ volcengine-asr (VOLC_ASR_API_KEY)
  │
  └─ Level 2: 本地 GPU ASR (兜底, 需 GPU)
@@ -152,8 +162,8 @@ podcast-summary/
 │   ├── architecture.md                   # 信源抓取多级结构
 │   ├── volcengine-asr-setup.md          # 火山云 ASR 配置
 │   └── vibevoice-local-setup.md         # 本地 GPU ASR 部署
-├── pyproject.toml                        # 基础依赖 (uv)
-├── requirements-asr.txt                  # GPU ASR 依赖 (可选)
+├── pyproject.toml                        # 可选 fetch / subtitle 依赖组
+├── requirements-asr.txt                  # legacy GPU ASR 依赖 (可选)
 ├── .gitignore
 ├── LICENSE
 └── README.md

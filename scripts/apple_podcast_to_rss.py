@@ -116,6 +116,7 @@ def main() -> int:
     parser.add_argument("--episode-id", default=None)
     parser.add_argument("--episode-index", type=int, default=None)
     parser.add_argument("--all", action="store_true")
+    parser.add_argument("--metadata-only", action="store_true")
     # Accept-but-ignore (parity with podcast-fetch contract).
     parser.add_argument(
         "--no-transcribe",
@@ -160,6 +161,8 @@ def main() -> int:
         passthrough += ["--episode-index", str(args.episode_index)]
     if args.all:
         passthrough += ["--all"]
+    if args.metadata_only:
+        passthrough += ["--metadata-only"]
 
     return delegate_to_rss_fetch(feed_url, passthrough)
 

@@ -1,18 +1,19 @@
 ---
 name: podcast-fetch
-description: 根据 URL 自动路由并拉取播客音频，输出含 README.md 和音频文件的 episode_dir；支持小宇宙、RSS、Apple Podcasts、Spotify 及新增源。YouTube/Bilibili 只在 subtitle-fetch 返回退出码 2 后作为 Linux GPU ASR 音频回退使用。当用户说"下载播客""拉取这一集""fetch episode"，或 podcast-pipeline 将非视频 URL/无字幕视频交给下载阶段时使用。
+description: 根据 URL 自动路由并解析播客元数据、官方 transcript 或音频 URL；仅本地 ASR 路径才下载音频。支持小宇宙、RSS、Apple Podcasts、Spotify 及新增源。当用户说“下载播客”“拉取这一集”“只解析音频 URL”“fetch episode”，或 pipeline 需要普通播客 handoff 时使用。
 ---
 
 # podcast-fetch
 
-播客拉取阶段。**只负责下载音频和 shownotes**，不做转录。
+播客拉取阶段。负责 shownotes、官方 transcript 和可选音频下载，不做 ASR。云端路径使用 `--metadata-only`，避免把火山云会自行拉取的音频再下载一遍。
 
 ## 输入 → 输出
 
 - **输入**：一个或多个 URL
 - **输出**：每个 URL 对应一个 `episode_dir`，目录里至少含
   - `README.md` — shownotes / 节目介绍
-  - `*.m4a` 或 `*.mp3` — 音频文件
+  - `transcript.md`（官方文稿命中时），或 README 中的 `> Audio URL:`
+  - `*.m4a` / `*.mp3` 仅本地 ASR 路径需要
 - **stdout 约定**：每个成功的 episode 打印一行 `✓ Episode complete: <ep_dir>`
 
 ## 路由表（核心扩展点）
@@ -23,7 +24,7 @@ description: 根据 URL 自动路由并拉取播客音频，输出含 README.md 
 
 | URL 模式 | Handler | 输出基目录 |
 |---|---|---|
-| `xiaoyuzhoufm.com/episode/<eid>` | `python3 scripts/xiaoyuzhou_download.py <url> --output-dir audios/xiaoyuzhou --no-transcribe` | `audios/xiaoyuzhou/...` |
+| `xiaoyuzhoufm.com/episode/<eid>` | 云端：`python3 scripts/xiaoyuzhou_download.py <url> --output-dir audios/xiaoyuzhou --metadata-only`；本地：去掉 `--metadata-only` | `audios/xiaoyuzhou/...` |
 | `xiaoyuzhoufm.com/podcast/<pid>` | 同上（自动展开整档播客） | `audios/xiaoyuzhou/...` |
 | RSS feed URL（任意域名） | `python3 scripts/rss_fetch.py <feed_url> --latest --podcast-name <slug> --output-dir audios` | `audios/<slug>/...` |
 | `podcasts.apple.com/.../id<digits>` | `python3 scripts/apple_podcast_to_rss.py <apple_url> --latest --podcast-name <slug> --output-dir audios`（自动 iTunes Lookup → 委托 rss_fetch） | `audios/<slug>/...` |
@@ -37,12 +38,12 @@ description: 根据 URL 自动路由并拉取播客音频，输出含 README.md 
 
 ## 关键约束
 
-1. **按来源选择环境**：常规音频源使用项目 venv；YouTube/Bilibili 视频回退使用 `uv run --group subtitle`，不得在 Intel Mac 安装 CUDA 依赖
+1. **按来源选择环境**：小宇宙 handler 是 Python 标准库；RSS/Apple/Spotify 才需要 `bash install.sh --with-fetch`；视频回退需要 subtitle 组。不得在 Intel Mac 或无 GPU 主机安装 CUDA 依赖
 2. **目录命名规则**（`sanitize_filename()` 已处理，新源脚本必须遵守）：
    - 只用 dash 连词，禁止特殊字符：`[](){}&,;!@#'~·…—–` 等
    - 目录结构：`<output-dir>/<podcast_name>/<short_title>/`
    - `<short_title>` 默认上限 80 字符；保留 `EP484` 等集数，去掉父目录里已有的播客名，英文词之间保留 dash
-3. **始终 `--no-transcribe`**：转录交给 `podcast-transcribe` skill 完成
+3. **云端始终 metadata-only**：有 `VOLC_ASR_API_KEY` 时只写 README/官方 transcript，不下载音频；转录交给 `volcengine-asr`
 4. **不要 stage 音频到 git**：`*.m4a` / `*.mp3` 应在 `.gitignore` 中
 5. **视频必须字幕优先**：YouTube/Bilibili URL 在 `podcast-pipeline` 中先调用 `subtitle-fetch`；只有收到退出码 2 / `asr-required.json` 后，Linux GPU 主机才调用本 skill 下载音频
 6. **禁止内置公共代理**：只接受用户显式提供的 `--proxy`；不得使用来源不明的免费代理列表
@@ -134,6 +135,8 @@ uv run --group subtitle python scripts/video_fetch.py \
 
 ## 下一步
 
-下载完拿到 `episode_dir` 后，调用 [`podcast-transcribe`](../podcast-transcribe/SKILL.md) 做转录。
+- 有火山 key：对 metadata-only 的 `episode_dir` 调用 `volcengine-asr`。
+- 只有本地 GPU：下载音频后调用 `podcast-transcribe`。
+- 已命中官方 transcript：直接进入后处理/summary。
 
 完整流水线参考 [`podcast-pipeline`](../podcast-pipeline/SKILL.md)。

@@ -108,6 +108,11 @@ def main() -> int:
              "Default: derived from feed URL hostname (e.g. feeds.transistor.fm). "
              "Set this for stable cross-source slugs (e.g. 'acquired').",
     )
+    parser.add_argument(
+        "--metadata-only",
+        action="store_true",
+        help="Write README/official transcript but do not download audio",
+    )
 
     selector = parser.add_mutually_exclusive_group()
     selector.add_argument("--list-only", action="store_true", help="Print episode list and exit")
@@ -134,7 +139,7 @@ def main() -> int:
 
     failed = 0
     for ep in targets:
-        result = download_rss_episode(ep, output_dir)
+        result = download_rss_episode(ep, output_dir, metadata_only=args.metadata_only)
         if result is None:
             failed += 1
 

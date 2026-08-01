@@ -4,6 +4,8 @@
 
 火山云 ASR 的优势：**不需要本地 GPU**，直接把音频公网 URL 提交给火山云异步转录，输出纯文本（无 speaker 标签），质量较好，可直接进入 `podcast-summary`，跳过 `podcast-transcript-fix`。
 
+本仓库的最小火山云通信层只使用 Bash + curl。Python 标准库客户端是可选便利层；不要安装 uv、httpx、requests、jq 或 ffmpeg。
+
 ## 前置条件
 
 - 火山引擎账号（支持支付宝/微信实名认证）
@@ -39,20 +41,13 @@
 
 ### 3.3 配置环境变量
 
-把 API key 告诉 AI agent 或写入 shell 配置：
+把 API key 通过 agent 的 secret 管理器或当前进程环境提供给脚本：
 
 ```bash
 export VOLC_ASR_API_KEY="<your-api-key>"
 ```
 
-持久化到 `~/.bashrc` 或 `~/.zshrc`：
-
-```bash
-echo 'export VOLC_ASR_API_KEY="<your-api-key>"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-> **安全提示**：不要把 API key 写进代码或提交到 git。`.gitignore` 已包含 `.secrets/`，建议把 key 放在 `~/.secrets/volc_asr.env` 然后 `source` 进来。
+> **安全提示**：不要把 API key 放在命令行参数、README、仓库文件或聊天示例里。若 key 曾被公开粘贴，应立即在控制台撤销并轮换。
 
 ## 步骤 4：验证
 
@@ -61,10 +56,18 @@ source ~/.bashrc
 手动验证：
 
 ```bash
-# 确认环境变量
-echo $VOLC_ASR_API_KEY
+# 只检查是否设置，不打印密钥
+test -n "$VOLC_ASR_API_KEY" && echo 'VOLC_ASR_API_KEY: configured'
 
-# 从一个已下载音频的 episode_dir 转录（README 里有 "> Audio URL:" 行）
+# 最小路径：curl-only，直接提交公网音频 URL
+bash scripts/volc_asr.sh run \
+  'https://example.com/episode.mp3' \
+  'audios/cloud/example'
+
+# 可选 Python 便利客户端：自动建目录/解析 JSON
+python3 scripts/volc_asr.py --audio-url 'https://example.com/episode.mp3'
+
+# 或复用 metadata-only handler 写出的 README（Python 便利客户端）
 python3 scripts/volc_asr.py --episode-dir "audios/xiaoyuzhou/<podcast>/<episode>"
 ```
 
@@ -81,7 +84,7 @@ TRANSCRIPT=audios/.../transcript.md
 ## 成本参考
 
 - 录音文件识别 2.0 按音频时长计费（具体价格见火山引擎控制台）
-- 典型 60 分钟播客约 ¥0.5 - ¥2（取决于套餐折扣）
+- 价格和免费额度可能变化，以火山引擎控制台当前信息为准
 - Agent Plan 套餐有月度额度，超出后按量付费
 
 ## 与本地 GPU ASR 的对比
@@ -92,7 +95,7 @@ TRANSCRIPT=audios/.../transcript.md
 | 部署 | 5 分钟（开通服务 + API key） | 1-2 小时（下载模型 + Docker） |
 | speaker 标签 | 无（纯文本） | 有 |
 | 耗时 | 2-10 分钟/集（含排队） | 5-30 分钟/集（取决于音频长度） |
-| 成本 | 按量付费 | 电费 + GPU 折旧 |
+| 成本 | 按控制台当前计费 | 电费 + GPU 折旧 |
 | 隐私 | 音频 URL 传给火山云 | 完全本地 |
 
 ## 故障排查

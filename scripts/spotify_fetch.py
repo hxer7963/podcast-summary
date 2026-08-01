@@ -281,7 +281,8 @@ def _resolve_show_to_rss(show_name: str, cache: dict[str, str]) -> str:
 
 
 def _download_one(track: SpotifyTrack, output_dir: Path, podcast_name_override: str | None,
-                  rss_cache: dict[str, str], rss_eps_cache: dict[str, list[dict]]) -> Path | None:
+                  rss_cache: dict[str, str], rss_eps_cache: dict[str, list[dict]],
+                  *, metadata_only: bool = False) -> Path | None:
     feed_url = _resolve_show_to_rss(track.show_name, rss_cache)
     if feed_url not in rss_eps_cache:
         # Use override if given (so directory name stays stable across sources),
@@ -296,7 +297,7 @@ def _download_one(track: SpotifyTrack, output_dir: Path, podcast_name_override: 
 
     rss_ep = find_matching_episode(eps, track.episode_title)
     log.info("Matched: %r → RSS title %r", track.episode_title, rss_ep["title"])
-    return download_rss_episode(rss_ep, output_dir)
+    return download_rss_episode(rss_ep, output_dir, metadata_only=metadata_only)
 
 
 def main() -> int:
@@ -327,6 +328,11 @@ def main() -> int:
         "--no-transcribe",
         action="store_true",
         help="(no-op) Accepted for podcast-fetch contract parity",
+    )
+    parser.add_argument(
+        "--metadata-only",
+        action="store_true",
+        help="Write README/official transcript but do not download audio",
     )
     parser.add_argument(
         "--latest",
@@ -393,7 +399,7 @@ def main() -> int:
             targets = [eps[0]]
         failed = 0
         for ep in targets:
-            if download_rss_episode(ep, output_dir) is None:
+            if download_rss_episode(ep, output_dir, metadata_only=args.metadata_only) is None:
                 failed += 1
         return 1 if failed else 0
 
@@ -413,7 +419,10 @@ def main() -> int:
     failed = 0
     for t in tracks:
         try:
-            result = _download_one(t, output_dir, args.podcast_name, rss_cache, rss_eps_cache)
+            result = _download_one(
+                t, output_dir, args.podcast_name, rss_cache, rss_eps_cache,
+                metadata_only=args.metadata_only,
+            )
         except RuntimeError as exc:
             print(f"[error] {t.episode_title!r}: {exc}", file=sys.stderr)
             failed += 1

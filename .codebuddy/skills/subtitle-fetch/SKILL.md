@@ -9,11 +9,11 @@ description: 自动识别并拉取 YouTube / Bilibili 视频字幕，生成可�
 
 ## 环境
 
-不要安装 `requirements-asr.txt`，其中含 CUDA 依赖。使用独立 uv dependency group：
+只有收到 YouTube/Bilibili URL 时才安装本组。不要安装 `requirements-asr.txt` 或 ffmpeg；纯字幕拉取不需要它们：
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
-uv sync --group subtitle
+bash install.sh --with-subtitle
 ```
 
 YouTube 还要求 Deno >= 2.3（推荐）或 Node >= 22。脚本按顺序发现 PATH 中的 Deno、`~/.deno/bin/deno`、Node；也可显式指定：

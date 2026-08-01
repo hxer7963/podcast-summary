@@ -12,10 +12,10 @@ AI agents auto-discover the skills from `.claude/skills/` (symlinked to `.codebu
 
 If a user says "帮我安装 https://github.com/hxer7963/podcast-summary":
 1. `git clone` the repo
-2. Run `bash install.sh` (installs lightweight Python deps only, ~50MB)
+2. Run `bash install.sh` (zero-package core install)
 3. Skills are auto-discovered — ready to use
 
-`install.sh` does **NOT** download the 20GB model/Docker image. Those are lazy-loaded later.
+The default install does not install uv, Python packages, ffmpeg, Docker images, or models. Optional source/video dependencies are installed only for the route that needs them.
 
 ## Lazy ASR loading (important)
 
@@ -72,15 +72,16 @@ episode_dir/
 └── {basename}.md       # Final summary (from podcast-summary)
 ```
 
-## Environment requirements
+## Capability-first environment routing
 
-Before running the pipeline, check the environment:
+Run `bash scripts/check_capabilities.sh --json` before choosing a path. Do not install a capability merely because it is missing.
 
-1. **Python deps**: `uv sync` (base) + `uv sync --group subtitle` (YouTube/Bilibili)
-2. **ASR backend** (one of):
-   - `VOLC_ASR_API_KEY` env var set → cloud ASR (no GPU needed). See `docs/volcengine-asr-setup.md`.
-   - Local GPU available (`nvidia-smi` works) + `vibevoice-asr-vllm` docker image pulled → local ASR. See `docs/vibevoice-local-setup.md`.
-   - Neither → pipeline will fail at transcription stage. Tell the user to configure one.
+- Skill discovery and summary: no local runtime packages.
+- Direct-audio Volcengine transport: curl only; jq is optional because the agent can read `volc-response.json`.
+- PodcastTranscript fetch and Xiaoyuzhou metadata helpers: Python 3.10+ standard library only.
+- RSS/Apple/Spotify fetch: install only on demand with `bash install.sh --with-fetch`.
+- YouTube/Bilibili subtitles: install only on demand with `bash install.sh --with-subtitle`; ffmpeg is not required for subtitle-only work.
+- Local GPU ASR: requires GPU + Docker + ffmpeg and follows the confirmed lazy-loading flow. Never install this path on a no-GPU machine.
 
 ## How to operate
 
@@ -98,7 +99,7 @@ When a user gives a URL or says "处理这集播客":
 
 ## Critical constraints
 
-- **Environment separation**: Subtitle stage uses `uv run --group subtitle` (no CUDA). GPU ASR uses `requirements-asr.txt` (CUDA). Never install CUDA deps on macOS/Intel.
+- **Environment separation**: Core/cloud is package-free; fetch and subtitle are separate optional groups; GPU ASR is Docker-based. Never install CUDA deps on macOS/Intel or a no-GPU host.
 - **One transcription at a time**: `--dp 4` occupies all GPUs.
 - **Filename sanitization**: No `[](){}&,;!@#'~` in dir/file names. Only alphanumerics, dash, underscore, CJK.
 - **Audio never in git**: `*.m4a`, `*.mp3` are gitignored.
@@ -106,23 +107,7 @@ When a user gives a URL or says "处理这集播客":
 
 ## Setup status check
 
-If unsure whether the environment is ready, run:
-
-```bash
-# Base deps
-uv sync 2>/dev/null && echo "base: OK" || echo "base: MISSING"
-
-# Subtitle deps
-uv sync --group subtitle 2>/dev/null && echo "subtitle: OK" || echo "subtitle: MISSING"
-
-# Cloud ASR
-[[ -n "$VOLC_ASR_API_KEY" ]] && echo "volc-asr: OK" || echo "volc-asr: not configured"
-
-# Local GPU ASR
-nvidia-smi >/dev/null 2>&1 && echo "gpu: OK" || echo "gpu: not available"
-docker image inspect hxer7963/vibevoice-asr-vllm:latest >/dev/null 2>&1 && echo "docker-image: OK" || echo "docker-image: not pulled"
-curl -sf http://localhost:8000/health -o /dev/null 2>/dev/null && echo "vllm-service: OK" || echo "vllm-service: not running"
-```
+If unsure whether the environment is ready, run `bash scripts/check_capabilities.sh --json` and select the cheapest ready route. Missing optional capabilities are not installation failures.
 
 ## Extending
 
