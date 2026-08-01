@@ -2,7 +2,7 @@
 
 本指南介绍如何开通火山引擎（Volcengine）大模型 ASR 服务，获取 API key，并配置到 podcast-summary 流水线。
 
-火山云 ASR 的优势：**不需要本地 GPU**，直接把音频公网 URL 提交给火山云异步转录，输出带 utterance 时间和 speaker 标签的 Markdown，可直接进入 `podcast-summary`。
+火山云 ASR 的优势：**不需要本地 GPU**，直接把音频公网 URL 提交给火山云异步转录，输出带 speaker 标签、不带 timestamp 的 Markdown，可直接进入 `podcast-summary`。完整时间信息保留在原始 `volc-response.json` 中。
 
 本仓库的最小火山云通信层只使用 Bash + curl。Python 标准库客户端是可选便利层；不要安装 uv、httpx、requests、jq 或 ffmpeg。
 
@@ -79,7 +79,7 @@ python3 scripts/volc_asr.py --episode-dir "audios/xiaoyuzhou/<podcast>/<episode>
 | `enable_punc` | `true` | 恢复标点，显著改善总结和长文本阅读 |
 | `enable_ddc` | `true` | 语义顺滑更适合总结；严格逐字场景可关闭 |
 | `enable_speaker_info` | `true` | 请求说话人区分，便于访谈角色归因 |
-| `show_utterances` | `true` | 输出分句、时间等结构化明细；固定开启 |
+| `show_utterances` | `true` | 输出 speaker、分句、分词和时间明细；固定开启，transcript 不展示 timestamp |
 | `enable_channel_split` | `false` | 仅双声道隔离录音适用，普通立体声不要开启 |
 | `vad_segment` | `false` | 默认让模型保持语义分句；特殊长停顿素材再试开启 |
 | `sensitive_words_filter` | `""` | 默认不静默删改原始内容 |

@@ -43,7 +43,7 @@ class VolcAsrTests(unittest.TestCase):
         self.assertTrue(options["show_utterances"])
         self.assertFalse(options["enable_channel_split"])
 
-    def test_rich_transcript_preserves_speaker_and_timing(self):
+    def test_rich_transcript_preserves_speaker_without_timestamp(self):
         data = {
             "result": {
                 "text": "你好，世界。",
@@ -58,9 +58,10 @@ class VolcAsrTests(unittest.TestCase):
             }
         }
         transcript = volc_asr.format_transcript(data)
-        self.assertIn("00:00:01.234–00:00:05.678", transcript)
         self.assertIn("Speaker 2", transcript)
         self.assertIn("Channel 1", transcript)
+        self.assertNotIn("1234", transcript)
+        self.assertNotIn("5678", transcript)
 
     def test_direct_audio_creates_stable_handoff(self):
         with tempfile.TemporaryDirectory() as directory:

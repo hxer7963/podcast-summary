@@ -5,7 +5,7 @@ description: 用火山引擎录音文件识别 2.0 将公网音频 URL 转成 tr
 
 # volcengine-asr
 
-把公网音频 URL 交给火山云异步识别，再生成带时间和 speaker 标签的 `episode_dir/transcript.md`。完整开通步骤见 `docs/volcengine-asr-setup.md`。
+把公网音频 URL 交给火山云异步识别，再生成带 speaker 标签、不带 timestamp 的 `episode_dir/transcript.md`。完整开通步骤见 `docs/volcengine-asr-setup.md`。
 
 ## 最小路径：curl transport
 
@@ -23,13 +23,13 @@ bash scripts/volc_asr.sh run \
 2. 调用 submit；
 3. 按响应头状态码轮询 query；
 4. 写 `README.md` 和 `volc-response.json`；
-5. 若系统本来已有 jq，再把 utterance 时间、speaker/channel 标签写入 `transcript.md`。
+5. 若系统本来已有 jq，再把 speaker/channel 标签写入 `transcript.md`，不写 timestamp。
 
-没有 jq 时不要安装它。读取 `volc-response.json`，优先把 `result.utterances` 格式化为带时间和 speaker 的 `transcript.md`；响应没有 utterances 时才回退到 `result.text`。AI agent 能直接完成这一步。
+没有 jq 时不要安装它。读取 `volc-response.json`，优先把 `result.utterances` 格式化为带 speaker、不带 timestamp 的 `transcript.md`；响应没有 utterances 时才回退到 `result.text`。AI agent 能直接完成这一步。
 
 ## 默认识别策略
 
-默认配置面向总结、问答和知识提取：开启 ITN、标点、语义顺滑（DDC）、speaker diarization 和 utterance 明细；保留完整 `volc-response.json`。`show_utterances=true` 不开放关闭，因为时间、分句、分词等明细依赖它。
+默认配置面向总结、问答和知识提取：开启 ITN、标点、语义顺滑（DDC）、speaker diarization 和 utterance 明细；保留完整 `volc-response.json`。`show_utterances=true` 不开放关闭，因为 speaker、分句、分词和时间明细依赖它。面向阅读的 `transcript.md` 只显示 speaker；时间信息仅保留在 `volc-response.json`。
 
 声道拆分默认关闭。只有原始录音确实把不同人物隔离在不同声道时，才设置 `VOLC_ASR_CHANNEL_SPLIT=true`。普通播客即使是立体声也不要自动开启。
 

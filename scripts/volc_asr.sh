@@ -192,10 +192,10 @@ run() {
                         . as $u
                         | (speaker) as $speaker
                         | (channel) as $channel
-                        | "**[\(($u.start_time // 0))–\(($u.end_time // 0)) ms]"
-                          + (if $speaker == null then "" else " [Speaker \($speaker)]" end)
-                          + (if $channel == null then "" else " [Channel \($channel)]" end)
-                          + "** \(($u.text // "") | gsub("[\\r\\n]+"; " "))";
+                        | ([if $speaker == null then empty else "Speaker \($speaker)" end,
+                            if $channel == null then empty else "Channel \($channel)" end] | join(" | ")) as $labels
+                        | (if ($labels | length) > 0 then "**[\($labels)]** " else "" end)
+                          + "\(($u.text // "") | gsub("[\\r\\n]+"; " "))";
                       (.result.utterances // .utterances // []) as $utterances
                       | (if ($utterances | length) > 0
                          then ($utterances | map(line) | join("\n\n"))
@@ -203,14 +203,14 @@ run() {
                          end) as $content
                       | select(($content | length) > 0)
                       | "# Transcription\n\n"
-                        + "> ASR: Volcengine bigmodel; speaker diarization and utterance timing requested\n\n"
+                        + "> ASR: Volcengine bigmodel; speaker labels shown; timing retained in volc-response.json\n\n"
                         + $content
                     ' "$body" > "$episode_dir/transcript.md" \
                         || die 'query succeeded but no transcript text or utterances were found'
                     printf 'TRANSCRIPT=%s\n' "$(cd "$episode_dir" && pwd)/transcript.md"
                 else
                     printf 'RESULT_JSON=%s\n' "$(cd "$episode_dir" && pwd)/volc-response.json"
-                    printf 'NEXT=Agent should format result.utterances with timestamps and speaker labels; fall back to result.text\n'
+                    printf 'NEXT=Agent should format result.utterances with speaker labels and no timestamps; timing remains in volc-response.json; fall back to result.text\n'
                 fi
                 rm -rf "$tmp_dir"
                 return

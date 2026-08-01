@@ -44,7 +44,7 @@ grep -q 'mock transcript' "$TEST_DIR/out/volc-response.json"
 grep -Eq '^(RESULT_JSON|TRANSCRIPT)=' "$TEST_DIR/run-output"
 if [[ -s "$TEST_DIR/out/transcript.md" ]]; then
     grep -q 'Speaker 1' "$TEST_DIR/out/transcript.md"
-    grep -q '1200–4800 ms' "$TEST_DIR/out/transcript.md"
+    ! grep -q '1200–4800 ms' "$TEST_DIR/out/transcript.md"
 fi
 
 printf 'curl transport test: OK\n'
