@@ -4,6 +4,20 @@ Agent-friendly podcast pipeline: **fetch → transcribe (local GPU or cloud ASR)
 
 把一集播客或视频从 URL 自动变成一篇可独立阅读的中文深度纪要。支持多级信源抓取（官方文稿 / 平台字幕 / PodcastTranscript.ai 公共库 / 火山云 ASR / 本地 GPU ASR），按成本从低到高自动选择最优路径。
 
+> **AI agent 入口**：本仓库根目录有 `AGENTS.md`（Codex）和 `CLAUDE.md`（Claude Code / CodeBuddy），AI agent 打开仓库时应先读这两个文件之一。它们告诉 agent 这个仓库是什么、怎么用、有哪些约束。本文档是给人看的，那两个是给 agent 看的。
+
+## 多 AI agent 支持
+
+本仓库的 skill 同时支持三种 AI agent，skill 源文件统一放在 `.codebuddy/skills/`，其他两个目录是 symlink：
+
+| Agent | Skill 发现路径 | 项目级配置文件 |
+|---|---|---|
+| Codex (OpenAI) | `.agents/skills/` → symlink → `.codebuddy/skills/` | `AGENTS.md` |
+| Claude Code | `.claude/skills/` → symlink → `.codebuddy/skills/` | `CLAUDE.md` |
+| CodeBuddy | `.codebuddy/skills/` | (内置) |
+
+所有 agent 共享同一套 `SKILL.md`，无需分别维护。如果你用的 agent 不在此列，只需把它的 skill 目录 symlink 到 `.codebuddy/skills/` 即可。
+
 ## 为什么需要这个项目
 
 - **信源分散**：播客分布在小宇宙、RSS、Apple Podcasts、Spotify、YouTube、Bilibili 等十几个平台，每个平台的抓取方式都不同
@@ -118,16 +132,20 @@ URL
 
 ```
 podcast-summary/
-├── .codebuddy/skills/                    # AI agent skills (9 个子 skill)
+├── AGENTS.md                             # Codex 项目级配置 (AI agent 入口)
+├── CLAUDE.md                             # Claude Code / CodeBuddy 项目级配置 (AI agent 入口)
+├── .codebuddy/skills/                    # Skill 源文件 (9 个子 skill, 真相源)
 │   ├── podcast-pipeline/SKILL.md         # 编排器
 │   ├── podcast-asr-scheduler/SKILL.md    # 转录调度大脑
 │   ├── podcast-fetch/SKILL.md            # URL → 音频
 │   ├── subtitle-fetch/SKILL.md           # 视频 → 字幕
 │   ├── podcasttranscript-fetch/SKILL.md  # PodcastTranscript.ai 公共库
-│   ├── podcast-transcribe/SKILL.md        # 本地 GPU ASR
+│   ├── podcast-transcribe/SKILL.md       # 本地 GPU ASR
 │   ├── volcengine-asr/SKILL.md           # 火山云 ASR
 │   ├── podcast-transcript-fix/SKILL.md   # ASR 校验
 │   └── podcast-summary/SKILL.md          # 中文深度纪要
+├── .agents/skills/                       # Symlink → .codebuddy/skills (Codex 发现)
+├── .claude/skills/                       # Symlink → .codebuddy/skills (Claude Code / CodeBuddy 发现)
 ├── scripts/                              # 信源抓取 + ASR 脚本
 ├── vibevoice-asr/                        # 本地 GPU ASR 引擎 (transcribe.py, serve_vllm.sh, ...)
 ├── docker/
