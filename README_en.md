@@ -10,12 +10,12 @@ Turns a podcast or video URL into a standalone Chinese deep-summary markdown fil
 
 ---
 
-<details>
+<details open>
 <summary><h2>Quick Install</h2></summary>
 
 **One sentence to install** — tell your AI agent:
 
-> 帮我安装 https://github.com/hxer7963/podcast-summary
+> Install https://github.com/hxer7963/podcast-summary
 
 Your AI agent (Codex / Claude Code / CodeBuddy) will clone the repo, run `install.sh`, and auto-discover the 9 skills. No programming needed.
 
@@ -32,7 +32,7 @@ The agent runs the full pipeline: fetch → transcribe → summary. ASR backend 
 
 </details>
 
-<details>
+<details open>
 <summary><h2>Lazy ASR Loading</h2></summary>
 
 The 20GB local GPU ASR assets (5GB Docker image + 15GB model weights) are **not** downloaded at install time. They are lazy-loaded only when all of these conditions are met:
@@ -50,7 +50,7 @@ Download only proceeds after user confirms. See the `podcast-asr-scheduler` skil
 
 </details>
 
-<details>
+<details open>
 <summary><h2>Multi-AI-Agent Support</h2></summary>
 
 This repo's skills support three AI agents simultaneously. Skill source files live in `.codebuddy/skills/`; the other two directories are symlinks:
@@ -65,7 +65,7 @@ All agents share the same set of `SKILL.md` files — no duplicate maintenance. 
 
 </details>
 
-<details>
+<details open>
 <summary><h2>Why This Project</h2></summary>
 
 - **Fragmented sources**: Podcasts are spread across xiaoyuzhou, RSS, Apple Podcasts, Spotify, YouTube, Bilibili, and a dozen other platforms — each with a different scraping method.
@@ -79,7 +79,7 @@ This project uses 9 independent sub-skills as a thin orchestration layer. Each s
 
 </details>
 
-<details>
+<details open>
 <summary><h2>Multi-Tier Source Fetching</h2></summary>
 
 This is the core design of this project. See [`docs/architecture.md`](docs/architecture.md) for details.
@@ -103,7 +103,7 @@ The scheduler (`podcast-asr-scheduler`) tries each level in priority order; if a
 
 </details>
 
-<details>
+<details open>
 <summary><h2>Supported Sources</h2></summary>
 
 | Platform | URL pattern | Fetch method |
@@ -122,7 +122,7 @@ Adding a new source requires only writing a `scripts/<source>_fetch.py` and addi
 
 </details>
 
-<details>
+<details open>
 <summary><h2>Repository Structure</h2></summary>
 
 ```
@@ -161,7 +161,7 @@ podcast-summary/
 
 </details>
 
-<details>
+<details open>
 <summary><h2>Core Skill Index</h2></summary>
 
 | Stage | Skill | One-liner |
@@ -177,7 +177,7 @@ podcast-summary/
 
 </details>
 
-<details>
+<details open>
 <summary><h2>Summary Format</h2></summary>
 
 The `{basename}.md` produced by `podcast-summary` follows a 5-section inverted-pyramid structure:
@@ -212,7 +212,7 @@ Not simple compression — it achieves: thorough coverage, interview feel, human
 
 </details>
 
-<details>
+<details open>
 <summary><h2>Environment Variables</h2></summary>
 
 | Variable | Purpose | Default |
@@ -234,7 +234,7 @@ Not simple compression — it achieves: thorough coverage, interview feel, human
 
 </details>
 
-<details>
+<details open>
 <summary><h2>Docker Image</h2></summary>
 
 The vLLM service uses the pre-built image `hxer7963/vibevoice-asr-vllm:latest` (Docker Hub), which includes:
@@ -247,7 +247,7 @@ See [`docs/vibevoice-local-setup.md`](docs/vibevoice-local-setup.md) for build i
 
 </details>
 
-<details>
+<details open>
 <summary><h2>Privacy & Security</h2></summary>
 
 - **Audio files never in git**: `.gitignore` includes `*.m4a`, `*.mp3`, `*.wav`, etc.
@@ -259,7 +259,7 @@ See [`docs/vibevoice-local-setup.md`](docs/vibevoice-local-setup.md) for build i
 
 </details>
 
-<details>
+<details open>
 <summary><h2>License</h2></summary>
 
 MIT License — see [LICENSE](LICENSE).
@@ -268,7 +268,7 @@ Note: The orchestration code in this project is MIT, but the VibeVoice ASR model
 
 </details>
 
-<details>
+<details open>
 <summary><h2>Acknowledgments</h2></summary>
 
 - [Microsoft VibeVoice](https://github.com/microsoft/VibeVoice) — ASR model & vLLM plugin

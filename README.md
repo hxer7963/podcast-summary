@@ -10,7 +10,7 @@ Agent 友好的播客流水线：**抓取 → 转录（本地 GPU 或云端 ASR�
 
 ---
 
-<details>
+<details open>
 <summary><h2>一键安装</h2></summary>
 
 **一句话安装** — 跟你的 AI 助手说：
@@ -32,7 +32,7 @@ Agent 自动运行完整流水线：抓取 → 转录 → 纪要。ASR 后端自
 
 </details>
 
-<details>
+<details open>
 <summary><h2>懒加载 ASR</h2></summary>
 
 20GB 的本地 GPU ASR 资产（5GB Docker 镜像 + 15GB 模型权重）**不会在安装时下载**。仅在以下条件全部满足时才懒加载：
@@ -50,7 +50,7 @@ Agent 自动运行完整流水线：抓取 → 转录 → 纪要。ASR 后端自
 
 </details>
 
-<details>
+<details open>
 <summary><h2>多 AI agent 支持</h2></summary>
 
 本仓库的 skill 同时支持三种 AI agent，skill 源文件统一放在 `.codebuddy/skills/`，其他两个目录是 symlink：
@@ -65,7 +65,7 @@ Agent 自动运行完整流水线：抓取 → 转录 → 纪要。ASR 后端自
 
 </details>
 
-<details>
+<details open>
 <summary><h2>为什么需要这个项目</h2></summary>
 
 - **信源分散**：播客分布在小宇宙、RSS、Apple Podcasts、Spotify、YouTube、Bilibili 等十几个平台，每个平台的抓取方式都不同
@@ -79,7 +79,7 @@ Agent 自动运行完整流水线：抓取 → 转录 → 纪要。ASR 后端自
 
 </details>
 
-<details>
+<details open>
 <summary><h2>信源抓取的多级结构</h2></summary>
 
 这是本项目的核心设计。详见 [`docs/architecture.md`](docs/architecture.md)。
@@ -103,7 +103,7 @@ URL
 
 </details>
 
-<details>
+<details open>
 <summary><h2>支持的信源</h2></summary>
 
 | 平台 | URL 形式 | 抓取方式 |
@@ -122,7 +122,7 @@ URL
 
 </details>
 
-<details>
+<details open>
 <summary><h2>仓库结构</h2></summary>
 
 ```
@@ -161,7 +161,7 @@ podcast-summary/
 
 </details>
 
-<details>
+<details open>
 <summary><h2>核心 Skill 索引</h2></summary>
 
 | 阶段 | Skill | 一句话职责 |
@@ -177,7 +177,7 @@ podcast-summary/
 
 </details>
 
-<details>
+<details open>
 <summary><h2>纪要格式</h2></summary>
 
 `podcast-summary` 产出的 `{basename}.md` 遵循五段式倒金字塔结构：
@@ -212,7 +212,7 @@ podcast-summary/
 
 </details>
 
-<details>
+<details open>
 <summary><h2>环境变量</h2></summary>
 
 | 变量 | 用途 | 默认值 |
@@ -234,7 +234,7 @@ podcast-summary/
 
 </details>
 
-<details>
+<details open>
 <summary><h2>Docker 镜像</h2></summary>
 
 vLLM 服务使用预构建镜像 `hxer7963/vibevoice-asr-vllm:latest`（Docker Hub），包含：
@@ -247,7 +247,7 @@ vLLM 服务使用预构建镜像 `hxer7963/vibevoice-asr-vllm:latest`（Docker H
 
 </details>
 
-<details>
+<details open>
 <summary><h2>隐私与安全</h2></summary>
 
 - **音频文件不入 git**：`.gitignore` 已包含 `*.m4a`, `*.mp3`, `*.wav` 等
@@ -259,7 +259,7 @@ vLLM 服务使用预构建镜像 `hxer7963/vibevoice-asr-vllm:latest`（Docker H
 
 </details>
 
-<details>
+<details open>
 <summary><h2>许可证</h2></summary>
 
 MIT License — 见 [LICENSE](LICENSE)。
@@ -268,7 +268,7 @@ MIT License — 见 [LICENSE](LICENSE)。
 
 </details>
 
-<details>
+<details open>
 <summary><h2>致谢</h2></summary>
 
 - [Microsoft VibeVoice](https://github.com/microsoft/VibeVoice) — ASR 模型与 vLLM plugin
