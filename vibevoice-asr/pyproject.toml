@@ -1,0 +1,90 @@
+[project]
+name = "vibevoice-asr"
+version = "0.1.0"
+description = "VibeVoice ASR service for podcast transcription with speaker diarization"
+requires-python = ">=3.12"
+dependencies = [
+    "transformers>=5.3.0",
+    "accelerate",
+    "fastapi",
+    "uvicorn[standard]",
+    "python-multipart",
+    "pydantic-settings",
+    "safetensors",
+    "huggingface-hub",
+    "tokenizers",
+    "librosa",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.scripts]
+vibevoice-server = "vibevoice_asr.server:main"
+
+[tool.uv]
+# torch installed separately: torch==2.6.0+cu124 from https://download.pytorch.org/whl/cu124
+# nvidia-* cu12 packages installed separately for CUDA 12.9 compatibility
+# See run.sh for LD_LIBRARY_PATH setup
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = [
+    "transformers.*",
+    "accelerate.*",
+    "uvicorn.*",
+]
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "N",      # pep8-naming
+    "UP",     # pyupgrade
+    "B",      # flake8-bugbear
+    "A",      # flake8-builtins
+    "C4",     # flake8-comprehensions
+    "PIE",    # flake8-pie
+    "SIM",    # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["vibevoice_asr"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+include = '\.pyi?$'

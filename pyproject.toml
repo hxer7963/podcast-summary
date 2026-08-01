@@ -1,0 +1,28 @@
+[project]
+name = "podcast-summary"
+version = "0.1.0"
+description = "Agent-friendly podcast pipeline: fetch → transcribe (local GPU or cloud ASR) → deep summary"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = [
+    "beautifulsoup4>=4.14.3",
+    "browser-cookie3>=0.20.1",
+    "feedparser>=6.0.11",
+    "httpx>=0.28.1",
+    "markdown>=3.10.2",
+    "requests>=2.33.1",
+]
+
+[dependency-groups]
+subtitle = [
+    # YouTube/Bilibili subtitle path uses yt-dlp. No CUDA, safe on macOS/Linux.
+    "yt-dlp[default]>=2026.7.4",
+]
+
+[tool.uv]
+# torch + triton for the GPU ASR path are NOT installed by default. They require
+# the CUDA wheel index. See docs/vibevoice-local-setup.md for the one-liner:
+#   uv pip install --python .venv/bin/python3 \
+#     torch==2.6.0 triton==3.2.0 \
+#     --index-url https://download.pytorch.org/whl/cu124

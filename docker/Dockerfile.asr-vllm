@@ -1,0 +1,46 @@
+# VibeVoice-ASR vLLM serving image.
+# Self-contained: the vibevoice plugin is baked in, so `docker run` starts the
+# optimized ASR server directly (no repo mount needed). Only the model weights
+# are mounted at runtime.
+#
+# Pre-built image on Docker Hub:  hxer7963/vibevoice-asr-vllm:latest
+#   docker pull hxer7963/vibevoice-asr-vllm:latest
+#
+# Build locally (only if you need custom modifications):
+#   cd <VibeVoice repo root>
+#   docker build -f Dockerfile.asr-vllm -t vibevoice-asr-vllm:latest .
+#
+# Run (mount the vLLM-format checkpoint):
+#   docker run -d --gpus all --name vibevoice-vllm --ipc=host -p 8000:8000 \
+#     -v /workspace/models:/workspace/models hxer7963/vibevoice-asr-vllm:latest
+FROM vllm/vllm-openai:v0.14.1
+
+# Audio decoding (server-side ffmpeg) — not in the base image.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libsndfile1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install the vibevoice package + vllm_plugin. This registers the
+# `vllm.general_plugins` entry point so vLLM auto-loads VibeVoiceForASRTraining.
+# torch/transformers are already satisfied by the base image (unpinned deps skip).
+COPY pyproject.toml README.md /opt/vibevoice/
+COPY vibevoice /opt/vibevoice/vibevoice
+COPY vllm_plugin /opt/vibevoice/vllm_plugin
+RUN pip install --no-cache-dir -e /opt/vibevoice
+
+# Optimized defaults (see docs/vibevoice-local-setup.md for rationale):
+#   USE_MEAN=1        deterministic acoustic encoding (reproducible, fewer loops)
+#   expandable_segments  reduce CUDA fragmentation for the fp32 audio encoder
+#   VV_GPU_MEM=0.85   measured ceiling on 4×RTX 4090 tp=4 (encoder peak ~22.7GB/卡)
+ENV VIBEVOICE_USE_MEAN=1 \
+    PYTORCH_ALLOC_CONF=expandable_segments:True \
+    PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+    VIBEVOICE_FFMPEG_MAX_CONCURRENCY=64 \
+    VV_MODEL_PATH=/workspace/models/VibeVoice-ASR-vllm \
+    VV_TP=4 \
+    VV_GPU_MEM=0.85
+
+COPY vllm_plugin/scripts/docker-entrypoint-asr.sh /usr/local/bin/vibevoice-asr-entrypoint.sh
+RUN chmod +x /usr/local/bin/vibevoice-asr-entrypoint.sh
+
+EXPOSE 8000
+ENTRYPOINT ["/usr/local/bin/vibevoice-asr-entrypoint.sh"]

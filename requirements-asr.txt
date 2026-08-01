@@ -1,0 +1,32 @@
+# GPU ASR dependencies (optional — only needed for the local VibeVoice path).
+# Install into the repo venv AFTER `uv sync`:
+#   uv pip install --python .venv/bin/python3 -r requirements-asr.txt \
+#     --index-url https://download.pytorch.org/whl/cu124
+#
+# torch + triton come from the PyTorch CUDA wheel index; nvidia-cu* packages
+# arrive as transitive deps of torch. The remaining ML deps are version-aligned
+# with the VibeVoice repo (https://github.com/microsoft/VibeVoice).
+
+transformers==5.8.0
+accelerate==1.13.0
+fastapi==0.136.1
+uvicorn[standard]==0.46.0
+python-multipart==0.0.27
+pydantic-settings==2.14.1
+safetensors==0.7.0
+huggingface-hub==1.14.0
+tokenizers==0.22.2
+librosa==0.11.0
+soundfile==0.13.1
+scikit-learn==1.8.0
+scipy==1.17.1
+numba==0.65.1
+llvmlite==0.47.0
+
+# torch and triton are installed separately from the CUDA wheel index:
+#   torch==2.6.0
+#   triton==3.2.0
+# Install with:
+#   uv pip install --python .venv/bin/python3 \
+#     torch==2.6.0 triton==3.2.0 \
+#     --index-url https://download.pytorch.org/whl/cu124

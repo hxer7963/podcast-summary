@@ -1,0 +1,69 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+.venv-subtitle/
+
+# macOS
+.DS_Store
+
+# Audio files (fetched on demand; never commit binary media)
+*.mp3
+*.m4a
+*.wav
+*.flac
+*.aac
+*.ogg
+*.opus
+
+# Raw video subtitle artifacts (transcript.md and README.md remain trackable)
+*.srt
+*.vtt
+*.json3
+*.ttml
+*.danmaku.xml
+
+# Browser sessions and local secrets
+cookies.txt
+cookies.*.txt
+cookies*.json
+scripts/cookies.txt
+scripts/cookies.*.txt
+.secrets/
+
+# Large archives
+*.tar.gz
+*.tgz
+*.zip
+
+# Generated transcripts / episode dirs (output of the pipeline, not source)
+audios/
+output/
+
+# vibevoice-asr local artifacts
+vibevoice-asr/.venv/
+vibevoice-asr/__pycache__/
+vibevoice-asr/test_outputs/
+vibevoice-asr/server.log
+vibevoice-asr/*.egg-info
+
+# HuggingFace model cache (downloaded by setup/hf_download.sh)
+models/
+
+# Runtime state files
+*.upload_attempted
+
+# Agent working memory (per-task notes, not source of truth)
+.agent/
+.codegraph/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
