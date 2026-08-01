@@ -64,6 +64,10 @@ version: 1.0.0
 ├─────────────────────────────────────────────────────────────┤
 │  条件: 本地有 GPU (nvidia-smi 可用)                         │
 │                                                              │
+│  ⚠️ LAZY INIT (首次使用时, 见下方"Level 2 懒加载流程"):      │
+│    如果 Docker 镜像或模型未就绪, 不自动拉取,                │
+│    而是评估磁盘 + 告知用户大小和收益 + 请求确认。            │
+│                                                              │
 │  前置:                                                       │
 │    - 如果 Priority 1 已下载音频 → 直接转录                   │
 │    - 如果跳过了 Priority 1 (无 API key) → 先 podcast-fetch   │
@@ -75,6 +79,93 @@ version: 1.0.0
 │  → exit 1: 失败 → 报错 (无更多降级)                          │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+## Level 2 懒加载流程（关键）
+
+当调度器降级到 Priority 2（本地 GPU ASR）时，**不要自动拉取模型和镜像**。按以下流程操作：
+
+### 步骤 1: 检查 GPU
+
+```bash
+nvidia-smi >/dev/null 2>&1 && echo "GPU available" || echo "no GPU"
+```
+
+无 GPU → 报错，提示用户设置 `VOLC_ASR_API_KEY`（见 `docs/volcengine-asr-setup.md`）。
+
+### 步骤 2: 检查 ASR 资产是否已就绪
+
+```bash
+# Docker 镜像
+docker image inspect hxer7963/vibevoice-asr-vllm:latest >/dev/null 2>&1 && echo "image: ready" || echo "image: missing"
+
+# 模型权重 (路径可通过 VV_MODEL_PATH 环境变量覆盖, 默认 /workspace/models/VibeVoice-ASR-vllm)
+MODEL_DIR="${VV_MODEL_PATH:-/workspace/models/VibeVoice-ASR-vllm}"
+[[ -f "$MODEL_DIR/config.json" ]] && echo "model: ready" || echo "model: missing"
+```
+
+如果两者都已就绪 → 跳到步骤 5 直接启动服务。
+
+### 步骤 3: 预评估磁盘需求
+
+需要下载的资产（如果缺失）：
+
+| 资产 | 大小 | 说明 |
+|---|---|---|
+| Docker 镜像 `hxer7963/vibevoice-asr-vllm:latest` | ~5GB | vLLM + VibeVoice plugin + ffmpeg |
+| 模型权重 `VibeVoice-ASR-vllm` | ~15GB | 8B 参数 vLLM 格式 checkpoint |
+| **合计** | **~20GB** | |
+
+检查可用磁盘空间：
+
+```bash
+df -h "${VV_MODEL_PATH:-/workspace/models}" | awk 'NR==2 {print $4 " available"}'
+```
+
+### 步骤 4: 告知用户并请求确认
+
+向用户输出类似以下内容（**不要跳过确认直接下载**）：
+
+```
+本地 GPU ASR 需要下载约 20GB 资产：
+
+  • Docker 镜像:  ~5GB  (hxer7963/vibevoice-asr-vllm:latest)
+  • 模型权重:    ~15GB  (VibeVoice-ASR-vllm, 8B 参数)
+
+下载是一次性的，后续转录不再重复下载。
+
+性能预期（4× RTX 4090, tp=4）：
+  • 60 分钟音频 → ~8 分钟转录（7.5x 实时）
+  • 带 speaker 分离（区分不同说话人）
+  • 无 API 费用（完全本地）
+
+当前可用磁盘空间: <XX> GB
+
+是否现在下载并启动本地 GPU ASR？
+```
+
+- 用户**确认** → 执行步骤 5
+- 用户**拒绝** → 报错，提示改用火山云 ASR（设置 `VOLC_ASR_API_KEY`）
+
+### 步骤 5: 下载并启动（用户确认后）
+
+```bash
+# 5a. 拉取 Docker 镜像 (如果缺失)
+docker pull hxer7963/vibevoice-asr-vllm:latest
+
+# 5b. 下载并转换模型 (如果缺失)
+bash setup/download_vibevoice_model.sh
+
+# 5c. 启动 vLLM 服务 (首次加载约 2-3 分钟)
+bash vibevoice-asr/serve_vllm.sh start
+```
+
+### 步骤 6: 服务就绪后转录
+
+```bash
+bash scripts/transcribe.sh <episode_dir>
+```
+
+> **为什么懒加载？** 大多数用户首次使用时，官方字幕/文稿或火山云 ASR 已能解决问题，不需要下载 20GB 本地资产。懒加载避免了不必要的下载，只在真正需要时才请求确认。
 
 > **扩展点**：Priority 0 和 Priority 1 之间可以插入一个"中央转录复用"层（例如自建的 transcript 缓存服务）。本仓库不内置此类私有源；如果你有自己的中央 transcript 仓库，可以在调度器里加一个 Priority 0.5 节点，命中即返回。
 
@@ -154,8 +245,9 @@ nvidia-smi >/dev/null 2>&1 && echo "GPU available" || echo "no GPU"
 
 5. 检查 GPU (nvidia-smi)
    → 有 GPU:
-     - 如果已有 episode_dir + 音频: 调 transcribe.sh
-     - 否则: 先 podcast-fetch / video_fetch 下载, 再 transcribe.sh
+     - 如果已有 episode_dir + 音频: 进入 Level 2 懒加载流程
+     - 否则: 先 podcast-fetch / video_fetch 下载, 再进入 Level 2 懒加载流程
+     - (见上方"Level 2 懒加载流程", 不要自动拉取模型/镜像, 先告知用户大小和收益并请求确认)
    → 无 GPU:
      - 报错: "无可用转录路径。请设置 VOLC_ASR_API_KEY 或在 GPU 主机上运行"
 ```

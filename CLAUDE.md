@@ -8,13 +8,24 @@ This file is read by Claude Code / CodeBuddy when it opens this repository. It t
 
 AI agents auto-discover the skills from `.claude/skills/` (symlinked to `.codebuddy/skills/`) on clone — no manual import needed.
 
-## One-command install (already done if repo is on disk)
+## Install (already done if repo is on disk)
 
-```bash
-bash install.sh
-```
+If a user says "帮我安装 https://github.com/hxer7963/podcast-summary":
+1. `git clone` the repo
+2. Run `bash install.sh` (installs lightweight Python deps only, ~50MB)
+3. Skills are auto-discovered — ready to use
 
-This installs Python deps, detects GPU/Docker/cloud-key, and configures the ASR backend. If the user hasn't run it, suggest it.
+`install.sh` does **NOT** download the 20GB model/Docker image. Those are lazy-loaded later.
+
+## Lazy ASR loading (important)
+
+When the pipeline needs local GPU ASR (Priority 2 in `podcast-asr-scheduler`), **do not auto-download** the ~20GB assets. Follow the "Level 2 懒加载流程" in the `podcast-asr-scheduler` skill:
+
+1. Check GPU available
+2. Check if Docker image + model already exist
+3. If missing: tell user the sizes (~5GB image + ~15GB model = ~20GB), speedup (7-10x realtime), and ask for confirmation
+4. Only after user confirms: `docker pull` + `bash setup/download_vibevoice_model.sh` + `bash vibevoice-asr/serve_vllm.sh start`
+5. Then run transcription
 
 ## Skill discovery
 

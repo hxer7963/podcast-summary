@@ -33,55 +33,56 @@ Agent-friendly podcast pipeline: **fetch → transcribe (local GPU or cloud ASR)
 
 ### English
 
-**One command to install:**
+**One sentence to install** — tell your AI agent:
 
-```bash
-git clone https://github.com/<org>/podcast-summary.git
-cd podcast-summary && bash install.sh
-```
+> 帮我安装 https://github.com/hxer7963/podcast-summary
 
-`install.sh` auto-detects your environment (GPU? Docker? cloud API key?) and configures the best ASR backend. It is idempotent — safe to re-run.
+Your AI agent (Codex / Claude Code / CodeBuddy) will clone the repo, run `install.sh`, and auto-discover the 9 skills. No programming needed.
 
-**One sentence to use:**
+`install.sh` only installs lightweight Python deps (~50MB). It does **not** download the 20GB model/Docker image — those are lazy-loaded later only when local GPU ASR is actually needed.
 
-Open the repo in your AI agent (Codex / Claude Code / CodeBuddy), then say:
+**One sentence to use** — tell your AI agent:
 
 > 处理这集播客 https://www.xiaoyuzhoufm.com/episode/xxxxx
 
-The agent auto-discovers 9 skills from `.agents/skills/` (Codex) or `.claude/skills/` (Claude Code) and runs the full pipeline: fetch → transcribe → summary. No manual skill import needed.
+The agent runs the full pipeline: fetch → transcribe → summary. ASR backend is chosen automatically:
+- Official transcript/subtitle first (zero cost)
+- Cloud ASR if `VOLC_ASR_API_KEY` is set (no GPU needed)
+- Local GPU ASR as fallback — **with user confirmation before downloading ~20GB** (see below)
 
 ### 中文
 
-**一句话安装：**
+**一句话安装** — 跟你的 AI 助手说：
 
-```bash
-git clone https://github.com/<org>/podcast-summary.git
-cd podcast-summary && bash install.sh
-```
+> 帮我安装 https://github.com/hxer7963/podcast-summary
 
-`install.sh` 自动检测环境（有无 GPU、Docker、云端 API key），配置最优 ASR 后端。脚本幂等，可重复运行。
+AI 助手（Codex / Claude Code / CodeBuddy）会自动 clone 仓库、运行 `install.sh`、发现 9 个 skill。无需编程知识。
 
-**一句话使用：**
+`install.sh` 只安装轻量 Python 依赖（~50MB），**不会**下载 20GB 的模型和镜像——这些在真正需要本地 GPU 转录时才懒加载。
 
-用 AI agent（Codex / Claude Code / CodeBuddy）打开本仓库，然后说：
+**一句话使用** — 跟你的 AI 助手说：
 
 > 处理这集播客 https://www.xiaoyuzhoufm.com/episode/xxxxx
 
-Agent 自动从 `.agents/skills/`（Codex）或 `.claude/skills/`（Claude Code）发现 9 个 skill，运行完整流水线：抓取 → 转录 → 纪要。无需手动导入 skill。
+Agent 自动运行完整流水线：抓取 → 转录 → 纪要。ASR 后端自动选择：
+- 优先官方字幕/文稿（零成本）
+- 设了 `VOLC_ASR_API_KEY` 则走火山云（无需 GPU）
+- 兜底走本地 GPU ASR——**下载前会告知大小和性能，征求用户确认**
 
-### What `install.sh` does
+### Lazy ASR loading / 懒加载 ASR
 
-| Step | Action | Auto? |
-|---|---|---|
-| 1 | Install Python deps (`uv sync` + subtitle group) | ✅ |
-| 2 | Check ffmpeg | ⚠️ (manual if missing) |
-| 3 | Detect GPU + Docker → pull image + download model | ✅ (if GPU) |
-| 4 | Detect `VOLC_ASR_API_KEY` → cloud ASR ready | ✅ (if key set) |
-| 5 | If neither: print setup instructions | 📋 |
+The 20GB local GPU ASR assets (5GB Docker image + 15GB model) are **not** downloaded at install time. They are lazy-loaded only when:
 
-> **No GPU?** Use cloud ASR — set `VOLC_ASR_API_KEY` after a 5-minute console setup. See [`docs/volcengine-asr-setup.md`](docs/volcengine-asr-setup.md).
->
-> **Have GPU?** `install.sh` pulls the Docker image and downloads the model automatically (~15GB, one-time). See [`docs/vibevoice-local-setup.md`](docs/vibevoice-local-setup.md).
+1. Official transcript / subtitle is unavailable (Level 0 missed)
+2. Cloud ASR is unavailable (no `VOLC_ASR_API_KEY`)
+3. Local GPU is available
+
+At that point, the agent asks the user for confirmation, showing:
+- Asset sizes (~5GB image + ~15GB model = ~20GB total)
+- Expected speedup (7-10x realtime, e.g. 60min audio → ~8min transcription)
+- Available disk space
+
+See `podcast-asr-scheduler` skill → "Level 2 懒加载流程" for details.
 
 ## 信源抓取的多级结构
 
