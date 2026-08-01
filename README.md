@@ -27,69 +27,61 @@ Agent-friendly podcast pipeline: **fetch → transcribe (local GPU or cloud ASR)
 
 本项目用 9 个独立子 skill 组成薄编排层，每个 skill 都有明确的 `episode_dir` 契约和幂等检查，AI agent 可以轻松端到端调用。
 
-## 快速开始
+> **这不是一个单独的 skill，而是一个包含 9 个 skill 的项目仓库。** AI agent clone 后自动发现这些 skill，无需手动安装或导入。This is not a single skill — it's a project repo bundling 9 skills. AI agents auto-discover them on clone.
 
-### 1. 安装
+## Quick Install / 一键安装
 
-```bash
-git clone <repo-url> podcast-summary
-cd podcast-summary
+### English
 
-# 基础依赖（字幕路径 + 抓取路径，无 CUDA，macOS/Linux 通用）
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv sync --group subtitle
-```
-
-### 2. 选择 ASR 后端
-
-你有两个选择（二选一，或都配置让调度器自动选）：
-
-#### 选项 A：火山云 ASR（无需 GPU，5 分钟配置）
-
-见 [`docs/volcengine-asr-setup.md`](docs/volcengine-asr-setup.md)。简述：
-1. 在火山引擎控制台购买 Agent Plan 套餐
-2. 在豆包语音 → 系统管理 → 开通管理 → 服务管理 → 大模型 里开通"录音文件识别 2.0"
-3. 在豆包语音 → 语音识别 → 【右上角】API 调用 里设置 API key
-4. `export VOLC_ASR_API_KEY="<your-key>"`
-
-#### 选项 B：本地 GPU ASR（需要 GPU，1-2 小时部署）
-
-见 [`docs/vibevoice-local-setup.md`](docs/vibevoice-local-setup.md)。简述：
-1. 克隆 [Microsoft VibeVoice](https://github.com/microsoft/VibeVoice) 仓库
-2. `bash setup/download_vibevoice_model.sh` 下载模型并转换为 vLLM 格式
-3. `docker pull hxer7963/vibevoice-asr-vllm:latest`（预构建镜像，无需本地 build）
-4. `bash vibevoice-asr/serve_vllm.sh start`
-
-### 3. 安装 Skill 到 AI agent
-
-本仓库的 skill 位于 `.codebuddy/skills/`。如果你的 AI agent（如 CodeBuddy / Claude Code）支持 skill 加载：
+**One command to install:**
 
 ```bash
-# CodeBuddy / Claude Code: skills 已在 .codebuddy/skills/ 下，自动加载
-# 其他 agent: 把 .codebuddy/skills/ 链接或拷贝到你的 agent skills 目录
+git clone https://github.com/<org>/podcast-summary.git
+cd podcast-summary && bash install.sh
 ```
 
-### 4. 使用
+`install.sh` auto-detects your environment (GPU? Docker? cloud API key?) and configures the best ASR backend. It is idempotent — safe to re-run.
 
-把一个播客 URL 给 AI agent，它会自动：
+**One sentence to use:**
 
-1. **URL 路由**：识别平台（小宇宙/RSS/YouTube/Bilibili/...）
-2. **信源抓取**：优先尝试官方文稿/字幕（零成本），命中即跳过 ASR
-3. **转录**：未命中官方文稿时，按 `VOLC_ASR_API_KEY` 是否设置选择火山云或本地 GPU
-4. **校验**：本地 GPU ASR 的输出会经过 `podcast-transcript-fix` 修正专名错误
-5. **纪要**：生成五段式中文深度纪要 `{basename}.md`
+Open the repo in your AI agent (Codex / Claude Code / CodeBuddy), then say:
 
+> 处理这集播客 https://www.xiaoyuzhoufm.com/episode/xxxxx
+
+The agent auto-discovers 9 skills from `.agents/skills/` (Codex) or `.claude/skills/` (Claude Code) and runs the full pipeline: fetch → transcribe → summary. No manual skill import needed.
+
+### 中文
+
+**一句话安装：**
+
+```bash
+git clone https://github.com/<org>/podcast-summary.git
+cd podcast-summary && bash install.sh
 ```
-用户: 帮我处理这集播客 https://www.xiaoyuzhoufm.com/episode/xxx
 
-AI: [自动调用 podcast-pipeline skill]
-    → podcast-fetch (下载音频 + shownotes)
-    → podcast-asr-scheduler (检测到 VOLC_ASR_API_KEY)
-    → volcengine-asr (火山云转录)
-    → podcast-summary (生成纪要)
-    
-    完成！纪要位于: audios/xiaoyuzhou/.../某主题-嘉宾名.md
-```
+`install.sh` 自动检测环境（有无 GPU、Docker、云端 API key），配置最优 ASR 后端。脚本幂等，可重复运行。
+
+**一句话使用：**
+
+用 AI agent（Codex / Claude Code / CodeBuddy）打开本仓库，然后说：
+
+> 处理这集播客 https://www.xiaoyuzhoufm.com/episode/xxxxx
+
+Agent 自动从 `.agents/skills/`（Codex）或 `.claude/skills/`（Claude Code）发现 9 个 skill，运行完整流水线：抓取 → 转录 → 纪要。无需手动导入 skill。
+
+### What `install.sh` does
+
+| Step | Action | Auto? |
+|---|---|---|
+| 1 | Install Python deps (`uv sync` + subtitle group) | ✅ |
+| 2 | Check ffmpeg | ⚠️ (manual if missing) |
+| 3 | Detect GPU + Docker → pull image + download model | ✅ (if GPU) |
+| 4 | Detect `VOLC_ASR_API_KEY` → cloud ASR ready | ✅ (if key set) |
+| 5 | If neither: print setup instructions | 📋 |
+
+> **No GPU?** Use cloud ASR — set `VOLC_ASR_API_KEY` after a 5-minute console setup. See [`docs/volcengine-asr-setup.md`](docs/volcengine-asr-setup.md).
+>
+> **Have GPU?** `install.sh` pulls the Docker image and downloads the model automatically (~15GB, one-time). See [`docs/vibevoice-local-setup.md`](docs/vibevoice-local-setup.md).
 
 ## 信源抓取的多级结构
 

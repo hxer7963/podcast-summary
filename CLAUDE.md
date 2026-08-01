@@ -4,9 +4,17 @@ This file is read by Claude Code / CodeBuddy when it opens this repository. It t
 
 ## What this project is
 
-`podcast-summary` is an agent-friendly pipeline that turns a podcast or video URL into a Chinese deep-summary markdown file. The pipeline has three stages: **fetch → transcribe → summary**. Each stage is a self-contained skill with an `episode_dir` handoff contract and idempotent checks.
+`podcast-summary` is **a project repo bundling 9 skills** (not a single skill). It turns a podcast or video URL into a Chinese deep-summary markdown file. Pipeline: **fetch → transcribe → summary**. Each stage is a self-contained skill with an `episode_dir` handoff contract and idempotent checks.
 
-This is NOT a traditional CLI tool. It is a collection of **9 skills** that an AI agent invokes. The agent decides which skill to call based on the URL and environment. Skills are auto-discovered from `.claude/skills/` (symlinked to `.codebuddy/skills/`).
+AI agents auto-discover the skills from `.claude/skills/` (symlinked to `.codebuddy/skills/`) on clone — no manual import needed.
+
+## One-command install (already done if repo is on disk)
+
+```bash
+bash install.sh
+```
+
+This installs Python deps, detects GPU/Docker/cloud-key, and configures the ASR backend. If the user hasn't run it, suggest it.
 
 ## Skill discovery
 
