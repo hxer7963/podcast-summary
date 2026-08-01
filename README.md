@@ -1,56 +1,17 @@
 # podcast-summary
 
-Agent-friendly podcast pipeline: **fetch → transcribe (local GPU or cloud ASR) → deep summary**.
+[English](./README_en.md) | **中文**
+
+Agent 友好的播客流水线：**抓取 → 转录（本地 GPU 或云端 ASR）→ 深度纪要**。
 
 把一集播客或视频从 URL 自动变成一篇可独立阅读的中文深度纪要。支持多级信源抓取（官方文稿 / 平台字幕 / PodcastTranscript.ai 公共库 / 火山云 ASR / 本地 GPU ASR），按成本从低到高自动选择最优路径。
 
 > **AI agent 入口**：本仓库根目录有 `AGENTS.md`（Codex）和 `CLAUDE.md`（Claude Code / CodeBuddy），AI agent 打开仓库时应先读这两个文件之一。它们告诉 agent 这个仓库是什么、怎么用、有哪些约束。本文档是给人看的，那两个是给 agent 看的。
 
-## 多 AI agent 支持
+---
 
-本仓库的 skill 同时支持三种 AI agent，skill 源文件统一放在 `.codebuddy/skills/`，其他两个目录是 symlink：
-
-| Agent | Skill 发现路径 | 项目级配置文件 |
-|---|---|---|
-| Codex (OpenAI) | `.agents/skills/` → symlink → `.codebuddy/skills/` | `AGENTS.md` |
-| Claude Code | `.claude/skills/` → symlink → `.codebuddy/skills/` | `CLAUDE.md` |
-| CodeBuddy | `.codebuddy/skills/` | (内置) |
-
-所有 agent 共享同一套 `SKILL.md`，无需分别维护。如果你用的 agent 不在此列，只需把它的 skill 目录 symlink 到 `.codebuddy/skills/` 即可。
-
-## 为什么需要这个项目
-
-- **信源分散**：播客分布在小宇宙、RSS、Apple Podcasts、Spotify、YouTube、Bilibili 等十几个平台，每个平台的抓取方式都不同
-- **转录成本高**：本地 GPU ASR 需要 4 卡 4090，云端 ASR 需要付费，但很多播客其实已有官方字幕或文稿
-- **纪要质量参差**：大多数 "AI summary" 工具只做压缩，丢失访谈弧线、人物细节和底层推理
-- **Agent 集成难**：传统 CLI 工具缺少清晰的输入输出契约和幂等检查，AI agent 调用容易出错
-
-本项目用 9 个独立子 skill 组成薄编排层，每个 skill 都有明确的 `episode_dir` 契约和幂等检查，AI agent 可以轻松端到端调用。
-
-> **这不是一个单独的 skill，而是一个包含 9 个 skill 的项目仓库。** AI agent clone 后自动发现这些 skill，无需手动安装或导入。This is not a single skill — it's a project repo bundling 9 skills. AI agents auto-discover them on clone.
-
-## Quick Install / 一键安装
-
-### English
-
-**One sentence to install** — tell your AI agent:
-
-> 帮我安装 https://github.com/hxer7963/podcast-summary
-
-Your AI agent (Codex / Claude Code / CodeBuddy) will clone the repo, run `install.sh`, and auto-discover the 9 skills. No programming needed.
-
-`install.sh` only installs lightweight Python deps (~50MB). It does **not** download the 20GB model/Docker image — those are lazy-loaded later only when local GPU ASR is actually needed.
-
-**One sentence to use** — tell your AI agent:
-
-> 处理这集播客 https://www.xiaoyuzhoufm.com/episode/xxxxx
-
-The agent runs the full pipeline: fetch → transcribe → summary. ASR backend is chosen automatically:
-- Official transcript/subtitle first (zero cost)
-- Cloud ASR if `VOLC_ASR_API_KEY` is set (no GPU needed)
-- Local GPU ASR as fallback — **with user confirmation before downloading ~20GB** (see below)
-
-### 中文
+<details>
+<summary><h2>一键安装</h2></summary>
 
 **一句话安装** — 跟你的 AI 助手说：
 
@@ -69,22 +30,57 @@ Agent 自动运行完整流水线：抓取 → 转录 → 纪要。ASR 后端自
 - 设了 `VOLC_ASR_API_KEY` 则走火山云（无需 GPU）
 - 兜底走本地 GPU ASR——**下载前会告知大小和性能，征求用户确认**
 
-### Lazy ASR loading / 懒加载 ASR
+</details>
 
-The 20GB local GPU ASR assets (5GB Docker image + 15GB model) are **not** downloaded at install time. They are lazy-loaded only when:
+<details>
+<summary><h2>懒加载 ASR</h2></summary>
 
-1. Official transcript / subtitle is unavailable (Level 0 missed)
-2. Cloud ASR is unavailable (no `VOLC_ASR_API_KEY`)
-3. Local GPU is available
+20GB 的本地 GPU ASR 资产（5GB Docker 镜像 + 15GB 模型权重）**不会在安装时下载**。仅在以下条件全部满足时才懒加载：
 
-At that point, the agent asks the user for confirmation, showing:
-- Asset sizes (~5GB image + ~15GB model = ~20GB total)
-- Expected speedup (7-10x realtime, e.g. 60min audio → ~8min transcription)
-- Available disk space
+1. 官方字幕/文稿不可用（Level 0 未命中）
+2. 火山云 ASR 不可用（未设置 `VOLC_ASR_API_KEY`）
+3. 本地有 GPU
 
-See `podcast-asr-scheduler` skill → "Level 2 懒加载流程" for details.
+此时 agent 会向用户请求确认，并展示：
+- 资产大小（~5GB 镜像 + ~15GB 模型 = ~20GB）
+- 预期加速比（7-10x 实时，例如 60 分钟音频 → ~8 分钟转录）
+- 可用磁盘空间
 
-## 信源抓取的多级结构
+用户确认后才下载。详见 `podcast-asr-scheduler` skill 的「Level 2 懒加载流程」。
+
+</details>
+
+<details>
+<summary><h2>多 AI agent 支持</h2></summary>
+
+本仓库的 skill 同时支持三种 AI agent，skill 源文件统一放在 `.codebuddy/skills/`，其他两个目录是 symlink：
+
+| Agent | Skill 发现路径 | 项目级配置文件 |
+|---|---|---|
+| Codex (OpenAI) | `.agents/skills/` → symlink → `.codebuddy/skills/` | `AGENTS.md` |
+| Claude Code | `.claude/skills/` → symlink → `.codebuddy/skills/` | `CLAUDE.md` |
+| CodeBuddy | `.codebuddy/skills/` | (内置) |
+
+所有 agent 共享同一套 `SKILL.md`，无需分别维护。如果你用的 agent 不在此列，只需把它的 skill 目录 symlink 到 `.codebuddy/skills/` 即可。
+
+</details>
+
+<details>
+<summary><h2>为什么需要这个项目</h2></summary>
+
+- **信源分散**：播客分布在小宇宙、RSS、Apple Podcasts、Spotify、YouTube、Bilibili 等十几个平台，每个平台的抓取方式都不同
+- **转录成本高**：本地 GPU ASR 需要 4 卡 4090，云端 ASR 需要付费，但很多播客其实已有官方字幕或文稿
+- **纪要质量参差**：大多数 "AI summary" 工具只做压缩，丢失访谈弧线、人物细节和底层推理
+- **Agent 集成难**：传统 CLI 工具缺少清晰的输入输出契约和幂等检查，AI agent 调用容易出错
+
+本项目用 9 个独立子 skill 组成薄编排层，每个 skill 都有明确的 `episode_dir` 契约和幂等检查，AI agent 可以轻松端到端调用。
+
+> **这不是一个单独的 skill，而是一个包含 9 个 skill 的项目仓库。** AI agent clone 后自动发现这些 skill，无需手动安装或导入。
+
+</details>
+
+<details>
+<summary><h2>信源抓取的多级结构</h2></summary>
 
 这是本项目的核心设计。详见 [`docs/architecture.md`](docs/architecture.md)。
 
@@ -105,7 +101,10 @@ URL
 
 调度器（`podcast-asr-scheduler`）按优先级逐级尝试，上一级未命中自动降级到下一级。
 
-## 支持的信源
+</details>
+
+<details>
+<summary><h2>支持的信源</h2></summary>
 
 | 平台 | URL 形式 | 抓取方式 |
 |---|---|---|
@@ -121,7 +120,10 @@ URL
 
 新增源只需写一个 `scripts/<source>_fetch.py` 并在路由表加一行，其他 skill 完全不动。
 
-## 仓库结构
+</details>
+
+<details>
+<summary><h2>仓库结构</h2></summary>
 
 ```
 podcast-summary/
@@ -157,7 +159,10 @@ podcast-summary/
 └── README.md
 ```
 
-## 核心 Skill 索引
+</details>
+
+<details>
+<summary><h2>核心 Skill 索引</h2></summary>
 
 | 阶段 | Skill | 一句话职责 |
 |---|---|---|
@@ -170,7 +175,10 @@ podcast-summary/
 | 2a | `podcast-transcript-fix` | 修正 ASR 错误（英文专名、技术术语、中英混杂） |
 | 2b | `podcast-summary` | 生成五段式详尽纪要 `{basename}.md` |
 
-## 纪要格式
+</details>
+
+<details>
+<summary><h2>纪要格式</h2></summary>
 
 `podcast-summary` 产出的 `{basename}.md` 遵循五段式倒金字塔结构：
 
@@ -202,7 +210,10 @@ podcast-summary/
 
 不是简单压缩，而是同时做到：覆盖充分、有访谈感、有烟火气、有底层思考、结构清楚。
 
-## 环境变量
+</details>
+
+<details>
+<summary><h2>环境变量</h2></summary>
 
 | 变量 | 用途 | 默认值 |
 |---|---|---|
@@ -221,7 +232,10 @@ podcast-summary/
 | `VV_HOTWORDS` | 热词（逗号分隔，提升专名识别） | — |
 | `VV_BACKEND` | 转录后端（`vllm` 或 `pytorch`） | `vllm` |
 
-## Docker 镜像
+</details>
+
+<details>
+<summary><h2>Docker 镜像</h2></summary>
 
 vLLM 服务使用预构建镜像 `hxer7963/vibevoice-asr-vllm:latest`（Docker Hub），包含：
 - vLLM v0.14.1
@@ -229,27 +243,38 @@ vLLM 服务使用预构建镜像 `hxer7963/vibevoice-asr-vllm:latest`（Docker H
 - VibeVoice vllm_plugin（注册 `VibeVoiceForASRTraining` 架构）
 - 优化的启动参数
 
-构建见 [`docs/vibevoice-local-setup.md`](docs/vibevoice-local-setup.md) 步骤 3。
+构建见 [`docs/vibevoice-local-setup.md`](docs/vibevoice-local-setup.md)。
 
-## 隐私与安全
+</details>
+
+<details>
+<summary><h2>隐私与安全</h2></summary>
 
 - **音频文件不入 git**：`.gitignore` 已包含 `*.m4a`, `*.mp3`, `*.wav` 等
 - **Cookie 不入 git**：`.gitignore` 已包含 `cookies.txt`, `cookies.*.txt`, `.secrets/`
 - **API key 通过环境变量**：`VOLC_ASR_API_KEY` 等，不写入代码或配置文件
 - **火山云路径**：音频 URL 会传给火山云服务器，介意隐私的用户请用本地 GPU 路径
-- **SSRF 防护**：`podcasttranscript_fetch.py` 和 `ai_signal_fetch.py`（如有）的请求 base 硬编码，不接受用户输入 URL
+- **SSRF 防护**：`podcasttranscript_fetch.py` 的请求 base 硬编码，不接受用户输入 URL
 - **Cookie 权限**：自动发现的持久 cookie 文件必须权限 ≤ `0600`，否则退出 3
 
-## 许可证
+</details>
+
+<details>
+<summary><h2>许可证</h2></summary>
 
 MIT License — 见 [LICENSE](LICENSE)。
 
 注意：本项目的编排代码是 MIT，但它调用的 VibeVoice ASR 模型权重遵循 [Microsoft 的研究许可证](https://huggingface.co/microsoft/VibeVoice-ASR)，火山引擎 API 遵循[火山引擎服务条款](https://www.volcengine.com/docs/6257/68966)。请自行确认你的使用场景符合这些条款。
 
-## 致谢
+</details>
+
+<details>
+<summary><h2>致谢</h2></summary>
 
 - [Microsoft VibeVoice](https://github.com/microsoft/VibeVoice) — ASR 模型与 vLLM plugin
 - [vLLM](https://github.com/vllm-project/vllm) — 推理引擎
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) — 视频字幕抓取
 - [PodcastTranscript.ai](https://podcasttranscript.ai) — 公共播客文字稿库
 - [火山引擎](https://www.volcengine.com/) — 云端 ASR 服务
+
+</details>
