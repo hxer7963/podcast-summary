@@ -65,7 +65,7 @@ podcast-summary 支持多级信源抓取，按**成本从低到高**的优先级
 - **成本**：按火山引擎控制台当前套餐与音频时长计费
 - **输入**：音频公网 URL（从 `episode_dir/README.md` 的 `> Audio URL:` 行解析）
 - **本地环境**：最小路径只需 Bash + curl；不需要 Python、uv、httpx、ffmpeg
-- **输出**：`transcript.md`（纯文本，无 speaker 标签）
+- **输出**：`transcript.md`（utterance 时间 + speaker 标签）和原始 `volc-response.json`
 - **适用**：不想占用本地 GPU，或没有 GPU
 - **配置**：见 `docs/volcengine-asr-setup.md`
 - **降级**：API key 缺失 / 调用失败 / 超时 → 进入 Level 2

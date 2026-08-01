@@ -24,7 +24,7 @@ if [[ "$endpoint" == */submit ]]; then
     printf '{}' > "$output"
 else
     printf 'HTTP/2 200\r\nX-Api-Status-Code: 20000000\r\n\r\n' > "$headers"
-    printf '{"result":{"text":"mock transcript long enough for the transport test"}}' > "$output"
+    printf '{"result":{"text":"mock transcript long enough for the transport test","utterances":[{"start_time":1200,"end_time":4800,"text":"mock transcript long enough for the transport test","additions":{"speaker":"1"}}]}}' > "$output"
 fi
 FAKE
 chmod +x "$TEST_DIR/bin/curl"
@@ -42,5 +42,9 @@ test -s "$TEST_DIR/out/README.md"
 test -s "$TEST_DIR/out/volc-response.json"
 grep -q 'mock transcript' "$TEST_DIR/out/volc-response.json"
 grep -Eq '^(RESULT_JSON|TRANSCRIPT)=' "$TEST_DIR/run-output"
+if [[ -s "$TEST_DIR/out/transcript.md" ]]; then
+    grep -q 'Speaker 1' "$TEST_DIR/out/transcript.md"
+    grep -q '1200–4800 ms' "$TEST_DIR/out/transcript.md"
+fi
 
 printf 'curl transport test: OK\n'

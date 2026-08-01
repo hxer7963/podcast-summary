@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""volc_asr.py — 调用火山引擎大模型 ASR,把音频 URL 转成纯文本 transcript.md。
+"""volc_asr.py — 调用火山引擎大模型 ASR，把音频 URL 转成结构化 transcript.md。
 
 火山引擎录音文件识别 2.0 (大模型版本) 异步转录:
 - API: https://openspeech.bytedance.com/api/v3/auc/bigmodel/{submit,query}
 - 鉴权: 环境变量 VOLC_ASR_API_KEY (HTTP 头 X-Api-Key)
 - 模式: 异步 submit + 轮询 query
-- 输出: 纯文本 (无 speaker 标签)
+- 输出: 带 utterance 时间和 speaker 标签的 Markdown（服务返回时）
 
 与 vibevoice-asr (podcast-transcribe) 的区别:
 - 不需要本地音频文件,直接传公网 audio URL 给火山云
 - 不需要 GPU
-- 输出无 speaker 标签 (纯文本,与 yt-dlp 字幕一致)
+- 默认请求 speaker diarization、标点和 utterance 明细
 - 不需要走 podcast-transcript-fix,可直接进 podcast-summary
 
 Usage:
@@ -77,6 +77,36 @@ def log(msg: str) -> None:
 
 def err(msg: str) -> None:
     print(f"[volc-asr] ERROR: {msg}", file=sys.stderr)
+
+
+def env_bool(name: str, default: bool) -> bool:
+    """Read a boolean environment override without third-party dependencies."""
+    value = os.environ.get(name)
+    if value is None or not value.strip():
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"true", "1", "yes", "on"}:
+        return True
+    if normalized in {"false", "0", "no", "off"}:
+        return False
+    raise RuntimeError(f"{name} must be true or false")
+
+
+def request_options() -> dict[str, object]:
+    """Defaults optimized for readable, information-rich podcast transcripts."""
+    return {
+        "model_name": "bigmodel",
+        "enable_itn": env_bool("VOLC_ASR_ENABLE_ITN", True),
+        "enable_punc": env_bool("VOLC_ASR_ENABLE_PUNC", True),
+        "enable_ddc": env_bool("VOLC_ASR_ENABLE_DDC", True),
+        "enable_speaker_info": env_bool("VOLC_ASR_SPEAKER_INFO", True),
+        "enable_channel_split": env_bool("VOLC_ASR_CHANNEL_SPLIT", False),
+        # Required for utterance/timing/word detail in the response.
+        "show_utterances": True,
+        "vad_segment": env_bool("VOLC_ASR_VAD_SEGMENT", False),
+        # Do not silently redact source material by default.
+        "sensitive_words_filter": "",
+    }
 
 
 # ── audio URL 解析 ────────────────────────────────────────────────────────────
@@ -156,17 +186,7 @@ def submit_task(
             "url": audio_url,
             "format": audio_format(audio_url),
         },
-        "request": {
-            "model_name": "bigmodel",
-            "enable_itn": True,        # 逆文本归一化
-            "enable_punc": True,        # 标点恢复
-            "enable_ddc": False,
-            "enable_speaker_info": False,   # 不做说话人分离 (纯文本)
-            "enable_channel_split": False,
-            "show_utterances": False,
-            "vad_segment": False,
-            "sensitive_words_filter": "",
-        },
+        "request": request_options(),
     }
     headers, body = _post_json(
         SUBMIT_URL,
@@ -263,8 +283,8 @@ def poll_until_done(
     *,
     poll_interval: int,
     max_wait: int,
-) -> str:
-    """轮询 query 接口直到完成,返回转录文本。"""
+) -> dict:
+    """轮询 query 接口直到完成，返回完整结果以保留 speaker 和时间信息。"""
     deadline = time.monotonic() + max_wait
     last_code = ""
     while time.monotonic() < deadline:
@@ -277,7 +297,7 @@ def poll_until_done(
                 raise RuntimeError(
                     f"query success but no text extracted: {json.dumps(data, ensure_ascii=False)[:500]}"
                 )
-            return text
+            return data
         if code in (CODE_RUNNING_1, CODE_RUNNING_2):
             log(f"running (code={code}), waiting {poll_interval}s ...")
             time.sleep(poll_interval)
@@ -293,16 +313,77 @@ def poll_until_done(
 
 # ── transcript.md 写入 ─────────────────────────────────────────────────────────
 
-def write_transcript(ep_dir: Path, text: str, *, audio_url: str, request_id: str) -> Path:
-    """按 episode_dir 契约写 transcript.md (与 transcribe.sh 格式对齐,但无 speaker 标签)。"""
+def format_milliseconds(value: object) -> str:
+    """Format a millisecond timestamp as HH:MM:SS.mmm."""
+    try:
+        milliseconds = max(0, int(value))
+    except (TypeError, ValueError):
+        milliseconds = 0
+    seconds, millis = divmod(milliseconds, 1000)
+    minutes, second = divmod(seconds, 60)
+    hour, minute = divmod(minutes, 60)
+    return f"{hour:02d}:{minute:02d}:{second:02d}.{millis:03d}"
+
+
+def _utterance_metadata(utterance: dict, key: str) -> object | None:
+    additions = utterance.get("additions")
+    if isinstance(additions, dict) and additions.get(key) is not None:
+        return additions[key]
+    aliases = {
+        "speaker": ("speaker", "speaker_id"),
+        "channel_id": ("channel_id",),
+    }
+    for alias in aliases.get(key, (key,)):
+        if utterance.get(alias) is not None:
+            return utterance[alias]
+    return None
+
+
+def format_transcript(data: dict) -> str:
+    """Preserve utterance boundaries, timestamps, speakers, and channels for AI use."""
+    result = data.get("result") if isinstance(data.get("result"), dict) else data
+    utterances = result.get("utterances") if isinstance(result, dict) else None
+    if isinstance(utterances, list) and utterances:
+        lines = []
+        for utterance in utterances:
+            if not isinstance(utterance, dict):
+                continue
+            text = str(utterance.get("text") or "").replace("\r", " ").replace("\n", " ").strip()
+            if not text:
+                continue
+            start = format_milliseconds(utterance.get("start_time"))
+            end = format_milliseconds(utterance.get("end_time"))
+            labels = [f"{start}–{end}"]
+            speaker = _utterance_metadata(utterance, "speaker")
+            channel = _utterance_metadata(utterance, "channel_id")
+            if speaker is not None:
+                labels.append(f"Speaker {speaker}")
+            if channel is not None:
+                labels.append(f"Channel {channel}")
+            lines.append(f"**[{' | '.join(labels)}]** {text}")
+        if lines:
+            return "\n\n".join(lines)
+    return extract_text(data)
+
+
+def write_transcript(ep_dir: Path, data: dict, *, audio_url: str, request_id: str) -> Path:
+    """Write an AI-readable transcript and retain the complete cloud response."""
     out = ep_dir / "transcript.md"
+    text = format_transcript(data)
+    if not text:
+        raise RuntimeError("query succeeded but no transcript text or utterances were found")
     header = (
         "# Transcription\n"
         f"> Audio URL: {audio_url}\n"
         f"> ASR: volcengine bigmodel (request_id={request_id})\n"
+        "> Detail: speaker diarization and utterance timing requested\n"
         f"> Generated by volcengine-asr\n\n"
     )
     out.write_text(header + text + "\n", encoding="utf-8")
+    (ep_dir / "volc-response.json").write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     return out
 
 
@@ -322,13 +403,13 @@ def transcribe_one(
 
     submit_task(api_key, audio_url, request_id=request_id)
     log(f"submitted, polling every {poll_interval}s (max {max_wait}s) ...")
-    text = poll_until_done(
+    data = poll_until_done(
         api_key, request_id,
         poll_interval=poll_interval, max_wait=max_wait,
     )
 
-    out = write_transcript(ep_dir, text, audio_url=audio_url, request_id=request_id)
-    log(f"transcript written: {out} ({len(text)} chars)")
+    out = write_transcript(ep_dir, data, audio_url=audio_url, request_id=request_id)
+    log(f"transcript written: {out} ({out.stat().st_size} bytes)")
     return out
 
 

@@ -27,7 +27,7 @@ AI 助手（Codex / Claude Code / CodeBuddy）会自动 clone 仓库、运行 `i
 bash scripts/volc_asr.sh run 'https://example.com/episode.mp3' 'audios/cloud/my-episode'
 ```
 
-脚本会创建 `episode_dir`、`README.md` 和火山原始结果；若本机已有 `jq` 会同时写 `transcript.md`，否则 agent 直接从 `volc-response.json` 提取 `result.text`，不为此安装新工具。RSS/Apple/Spotify 抓取和视频字幕依赖只在对应路径首次需要时安装：`bash install.sh --with-fetch` 或 `bash install.sh --with-subtitle`。
+脚本会创建 `episode_dir`、`README.md` 和火山原始结果；若本机已有 `jq` 会同时写带时间与 speaker 标签的 `transcript.md`，否则 agent 直接格式化 `volc-response.json` 中的 utterances，不为此安装新工具。RSS/Apple/Spotify 抓取和视频字幕依赖只在对应路径首次需要时安装：`bash install.sh --with-fetch` 或 `bash install.sh --with-subtitle`。
 
 **一句话使用** — 跟你的 AI 助手说：
 

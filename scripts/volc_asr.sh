@@ -19,6 +19,12 @@ Environment:
   VOLC_ASR_API_KEY          required; never pass the key as a CLI argument
   VOLC_ASR_POLL_INTERVAL    seconds, default 10
   VOLC_ASR_MAX_WAIT         seconds, default 1800
+  VOLC_ASR_ENABLE_ITN       true/false, default true
+  VOLC_ASR_ENABLE_PUNC      true/false, default true
+  VOLC_ASR_ENABLE_DDC       true/false, default true
+  VOLC_ASR_SPEAKER_INFO     true/false, default true
+  VOLC_ASR_CHANNEL_SPLIT    true/false, default false
+  VOLC_ASR_VAD_SEGMENT      true/false, default false
 
 The run command always writes volc-response.json. If jq is already available,
 it also extracts transcript.md. jq is optional and is never installed here.
@@ -26,6 +32,16 @@ EOF
 }
 
 die() { printf '[volc-asr] ERROR: %s\n' "$*" >&2; exit 1; }
+
+env_bool() {
+    local name="$1" default="$2" value
+    value="${!name:-$default}"
+    case "$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')" in
+        true|1|yes|on) printf 'true' ;;
+        false|0|no|off) printf 'false' ;;
+        *) die "$name must be true or false" ;;
+    esac
+}
 
 require_api() {
     command -v curl >/dev/null 2>&1 || die 'curl is required'
@@ -105,8 +121,15 @@ submit() {
     local audio_url="$1" request_id="${2:-$(new_uuid)}"
     validate_audio_url "$audio_url"
     local format payload tmp_dir headers body code message
+    local enable_itn enable_punc enable_ddc speaker_info channel_split vad_segment
     format="$(audio_format "$audio_url")"
-    payload="{\"user\":{\"uid\":\"podcast-summary\"},\"audio\":{\"url\":\"$audio_url\",\"format\":\"$format\",\"codec\":\"raw\"},\"request\":{\"model_name\":\"bigmodel\",\"enable_itn\":true,\"enable_punc\":true,\"enable_ddc\":false,\"enable_speaker_info\":false,\"enable_channel_split\":false,\"show_utterances\":false,\"vad_segment\":false,\"sensitive_words_filter\":\"\"}}"
+    enable_itn="$(env_bool VOLC_ASR_ENABLE_ITN true)"
+    enable_punc="$(env_bool VOLC_ASR_ENABLE_PUNC true)"
+    enable_ddc="$(env_bool VOLC_ASR_ENABLE_DDC true)"
+    speaker_info="$(env_bool VOLC_ASR_SPEAKER_INFO true)"
+    channel_split="$(env_bool VOLC_ASR_CHANNEL_SPLIT false)"
+    vad_segment="$(env_bool VOLC_ASR_VAD_SEGMENT false)"
+    payload="{\"user\":{\"uid\":\"podcast-summary\"},\"audio\":{\"url\":\"$audio_url\",\"format\":\"$format\",\"codec\":\"raw\"},\"request\":{\"model_name\":\"bigmodel\",\"enable_itn\":$enable_itn,\"enable_punc\":$enable_punc,\"enable_ddc\":$enable_ddc,\"enable_speaker_info\":$speaker_info,\"enable_channel_split\":$channel_split,\"show_utterances\":true,\"vad_segment\":$vad_segment,\"sensitive_words_filter\":\"\"}}"
     tmp_dir="$(mktemp -d)"
     headers="$tmp_dir/headers"; body="$tmp_dir/body"
     post_json "$SUBMIT_URL" "$request_id" "$payload" "$headers" "$body" 1
@@ -158,12 +181,36 @@ run() {
             20000000)
                 cp "$body" "$episode_dir/volc-response.json"
                 if command -v jq >/dev/null 2>&1; then
-                    jq -er '.result.text // .text // .transcript' "$body" > "$episode_dir/transcript.md" \
-                        || die 'query succeeded but no transcript text was found'
+                    jq -er '
+                      def addition($key):
+                        if (.additions | type) == "object" then .additions[$key] else null end;
+                      def speaker:
+                        (addition("speaker") // .speaker // .speaker_id // null);
+                      def channel:
+                        (addition("channel_id") // .channel_id // null);
+                      def line:
+                        . as $u
+                        | (speaker) as $speaker
+                        | (channel) as $channel
+                        | "**[\(($u.start_time // 0))–\(($u.end_time // 0)) ms]"
+                          + (if $speaker == null then "" else " [Speaker \($speaker)]" end)
+                          + (if $channel == null then "" else " [Channel \($channel)]" end)
+                          + "** \(($u.text // "") | gsub("[\\r\\n]+"; " "))";
+                      (.result.utterances // .utterances // []) as $utterances
+                      | (if ($utterances | length) > 0
+                         then ($utterances | map(line) | join("\n\n"))
+                         else (.result.text // .text // .transcript // "")
+                         end) as $content
+                      | select(($content | length) > 0)
+                      | "# Transcription\n\n"
+                        + "> ASR: Volcengine bigmodel; speaker diarization and utterance timing requested\n\n"
+                        + $content
+                    ' "$body" > "$episode_dir/transcript.md" \
+                        || die 'query succeeded but no transcript text or utterances were found'
                     printf 'TRANSCRIPT=%s\n' "$(cd "$episode_dir" && pwd)/transcript.md"
                 else
                     printf 'RESULT_JSON=%s\n' "$(cd "$episode_dir" && pwd)/volc-response.json"
-                    printf 'NEXT=Agent should extract result.text into transcript.md\n'
+                    printf 'NEXT=Agent should format result.utterances with timestamps and speaker labels; fall back to result.text\n'
                 fi
                 rm -rf "$tmp_dir"
                 return

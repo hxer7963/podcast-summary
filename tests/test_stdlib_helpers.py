@@ -36,6 +36,31 @@ class VolcAsrTests(unittest.TestCase):
         self.assertEqual(request_id, "request-id")
         self.assertEqual(captured["headers"]["X-Api-Key"], "secret")
         self.assertEqual(captured["headers"]["X-Api-Resource-Id"], "volc.seedasr.auc")
+        options = captured["payload"]["request"]
+        self.assertTrue(options["enable_punc"])
+        self.assertTrue(options["enable_ddc"])
+        self.assertTrue(options["enable_speaker_info"])
+        self.assertTrue(options["show_utterances"])
+        self.assertFalse(options["enable_channel_split"])
+
+    def test_rich_transcript_preserves_speaker_and_timing(self):
+        data = {
+            "result": {
+                "text": "你好，世界。",
+                "utterances": [
+                    {
+                        "start_time": 1234,
+                        "end_time": 5678,
+                        "text": "你好，世界。",
+                        "additions": {"speaker": "2", "channel_id": "1"},
+                    }
+                ],
+            }
+        }
+        transcript = volc_asr.format_transcript(data)
+        self.assertIn("00:00:01.234–00:00:05.678", transcript)
+        self.assertIn("Speaker 2", transcript)
+        self.assertIn("Channel 1", transcript)
 
     def test_direct_audio_creates_stable_handoff(self):
         with tempfile.TemporaryDirectory() as directory:
