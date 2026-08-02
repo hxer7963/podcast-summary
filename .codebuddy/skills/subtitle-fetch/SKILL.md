@@ -52,6 +52,8 @@ URL
 
 ## Cookie 策略
 
+同机浏览器 Cookie 获取、Cookie-Editor 后备流程、环境初始化与故障分类见 [`docs/youtube-cookie-runbook.md`](docs/youtube-cookie-runbook.md)。遇到 YouTube 认证问题时必须按该文档执行，不得输出 Cookie 内容。
+
 Linux 可设置 `YOUTUBE_COOKIES_FILE` 或 `BILIBILI_COOKIES_FILE`。Cookie 文件必须放在仓库外或 `.secrets/`，禁止提交 Git。Cookie-Editor JSON 会转换成权限 `0600` 的临时 Netscape 文件，并在命令结束时删除。
 
 无需参数时自动检查标准目录：
