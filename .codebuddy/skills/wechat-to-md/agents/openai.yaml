@@ -1,0 +1,4 @@
+interface:
+  display_name: "微信公众号抓取"
+  short_description: "用轻量标准库把微信公众号文章保存为本地 Markdown 知识库"
+  default_prompt: "Use $wechat-to-md to save this WeChat article as a local Markdown knowledge-base entry."

@@ -1,6 +1,6 @@
 # 架构：信源抓取多级结构与流水线
 
-本文档说明 podcast-summary 的整体架构，重点是**信源抓取的多级结构**和**转录调度的优先级决策树**。
+本文档说明 podcast-summary 的播客转录流水线与文章知识库抓取路径，重点是低依赖路由、原子 skill 和显式 summary 边界。
 
 ## 整体流水线
 
@@ -18,6 +18,17 @@ URL ──▶ podcast-asr-scheduler (调度大脑) ──▶ episode_dir + trans
 ```
 
 本仓库到 summary 为止。后续的归档、标签、推送等阶段由下游项目自行实现。
+
+文章路径与播客路径解耦：
+
+```
+微信公众号 URL → wechat-to-md → article_dir/article.md
+其他公开网页/RSS → article-fetch → article_dir/article.md
+                                      └→ podcast-summary  # 仅用户明确要求
+PodHood 条件 → podhood-fetch → episode_dir/transcript.md
+```
+
+单纯“抓取/保存/构建知识库”请求在 fetch 完成后停止。`article-pipeline` 只处理用户明确要求“抓取并总结”的端到端任务。
 
 ## 信源抓取的多级结构
 
@@ -106,6 +117,9 @@ podcast-summary 支持多级信源抓取，按**成本从低到高**的优先级
 | RSS feed URL | → `podcast-fetch`（RSS 下载） |
 | `podcasts.apple.com/.../id<digits>` | → `podcast-fetch`（Apple → iTunes Lookup → RSS） |
 | `open.spotify.com/{episode,show,playlist}` | → `podcast-fetch`（Spotify embed → iTunes Search → RSS） |
+| `mp.weixin.qq.com/s/...` | → `wechat-to-md`，只构建文章知识库 |
+| 其他公开文章 URL | → `article-fetch`，只构建文章知识库 |
+| `*.podhood.com` 或 PodHood 筛选条件 | → `podhood-fetch`，下载公开完整文稿 |
 
 ## Handoff 契约
 
@@ -122,6 +136,18 @@ episode_dir/
 
 每个子 skill 的输入是 `episode_dir`，输出是在其中新增文件。幂等检查：已有产物则跳过。
 
+文章使用并行的单正文契约：
+
+```
+article_dir/
+├── README.md           # 来源、作者、日期和原始 URL
+├── article.md          # 唯一正文真相源
+├── images/             # 微信文章可选
+└── {basename}.md       # 仅显式 summary 后产生
+```
+
+不创建 `transcript.md = article.md` 镜像；`podcast-summary` 根据目录类型直接读取对应正文。
+
 ## 扩展点
 
 ### 新增播客源
@@ -133,6 +159,10 @@ episode_dir/
 - 成功时 stdout 打印 `✓ Episode complete: <ep_dir>`
 
 然后在 `.codebuddy/skills/podcast-fetch/SKILL.md` 的路由表中加一行。**其他 skill 完全不动**。
+
+### 新增文章源
+
+优先在所属 skill 的 `scripts/` 内放置自包含脚本，并保持 `article.md + README.md` 契约。只有多个 skill 共享的代码才提升到仓库根 `scripts/`。成功时 stdout 打印 `✓ Article complete: <absolute_article_dir>`。
 
 ### 新增 ASR 后端
 
@@ -159,6 +189,7 @@ episode_dir/
 | 小宇宙元数据/Audio URL | Python 3.10+ 标准库 | 无 | 云端路径不下载音频 |
 | 火山云 ASR | Bash + curl | 无 | Python/jq 均为可选，不安装 |
 | PodcastTranscript | Python 3.10+ 标准库 | 无 | 不需要 uv 或 ffmpeg |
+| 公开文章/微信/PodHood | Python 3.10+ 标准库 | 无 | 不需要 uv、浏览器或第三方包 |
 | RSS/Apple/Spotify | `uv run --group fetch` | 无 | 仅收到对应 URL 时安装 |
 | 字幕抓取 | `uv run --group subtitle` | 无 | 仅视频 URL 使用；纯字幕无需 ffmpeg |
 | 本地 GPU ASR | 专用 Docker | 是 | 仅检测到 GPU 且用户确认后懒加载 |

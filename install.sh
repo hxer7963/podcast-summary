@@ -17,7 +17,7 @@ Volcengine transport uses curl. Python helpers are optional and are never
 installed by the default path.
 
 Options:
-  --with-fetch       Install dependencies for RSS/Apple/Spotify fetch
+  --with-fetch       Install dependencies for podcast RSS/Apple/Spotify fetch
   --with-subtitle    Install yt-dlp for YouTube/Bilibili subtitles
   --with-all         Install both optional groups above
   -h, --help         Show this help

@@ -1,0 +1,4 @@
+interface:
+  display_name: "文章抓取"
+  short_description: "从公开网页或 RSS 拉取正文并构建可迁移的本地文章目录"
+  default_prompt: "Use $article-fetch to fetch this public article into a local article directory."

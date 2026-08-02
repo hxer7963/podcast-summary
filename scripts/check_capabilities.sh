@@ -24,6 +24,9 @@ if [[ "${1:-}" == --json ]]; then
   "summary": {"ready": true, "requires": []},
   "volcengine_curl_transport": {"ready": $curl_ok, "configured": $key_ok, "jq_optional": $jq_ok},
   "python_helpers": {"ready": $python_ok, "requires": ["python>=3.10"]},
+  "article_fetch": {"ready": $python_ok, "requires": ["python>=3.10"], "packages": []},
+  "wechat_fetch": {"ready": $python_ok, "requires": ["python>=3.10"], "packages": []},
+  "podhood_fetch": {"ready": $python_ok, "requires": ["python>=3.10"], "packages": []},
   "optional_installer": {"ready": $uv_ok, "requires": ["uv"]},
   "local_gpu_asr": {"gpu": $gpu_ok, "docker": $docker_ok, "ffmpeg": $ffmpeg_ok}
 }
@@ -37,4 +40,5 @@ printf '  ✓ summary: ready (agent-native)\n'
 [[ "$curl_ok" == true ]] && printf '  ✓ volcengine curl transport: ready\n' || printf '  · volcengine curl transport: curl missing\n'
 [[ "$key_ok" == true ]] && printf '  ✓ VOLC_ASR_API_KEY: configured\n' || printf '  · VOLC_ASR_API_KEY: not set\n'
 [[ "$python_ok" == true ]] && printf '  ✓ optional Python helpers: ready\n' || printf '  · optional Python helpers: Python 3.10+ missing\n'
+[[ "$python_ok" == true ]] && printf '  ✓ article/WeChat/PodHood fetch: ready (standard library)\n' || printf '  · article/WeChat/PodHood fetch: Python 3.10+ missing\n'
 [[ "$gpu_ok" == true ]] && printf '  ✓ local GPU detected\n' || printf '  · local GPU: not detected (no GPU packages will be installed)\n'

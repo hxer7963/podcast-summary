@@ -2,9 +2,9 @@
 
 **English** | [中文](./README.md)
 
-Agent-friendly podcast pipeline: **fetch → transcribe (local GPU or cloud ASR) → deep summary**.
+Agent-friendly podcast and article knowledge skill hub: **fetch → transcribe when needed → summarize only when requested**.
 
-Turns a podcast or video URL into a standalone Chinese deep-summary markdown file. Supports multi-tier source fetching (official transcripts / platform subtitles / PodcastTranscript.ai public library / Volcengine cloud ASR / local GPU ASR), automatically selecting the lowest-cost path.
+Builds structured local knowledge from podcasts, videos, public webpages, RSS, WeChat, and PodHood; article fetches stop before summary unless the user explicitly asks for one. Supports multi-tier source fetching (official transcripts / platform subtitles / PodcastTranscript.ai public library / Volcengine cloud ASR / local GPU ASR), automatically selecting the lowest-cost path.
 
 > **AI agent entry**: This repo has `AGENTS.md` (Codex) and `CLAUDE.md` (Claude Code / CodeBuddy) at the root. AI agents should read the relevant one first when opening this repo. Those tell the agent what this repo is, how to use it, and what constraints apply. This document is for humans.
 
@@ -17,7 +17,7 @@ Turns a podcast or video URL into a standalone Chinese deep-summary markdown fil
 
 > Install https://github.com/hxer7963/podcast-summary
 
-Your AI agent (Codex / Claude Code / CodeBuddy) will clone the repo, run `install.sh`, and auto-discover the 9 skills. No programming needed.
+Your AI agent (Codex / Claude Code / CodeBuddy) will clone the repo, run `install.sh`, and auto-discover the 13 skills. No programming needed.
 
 `install.sh` is a **zero-package install** by default: it does not install uv, Python packages, ffmpeg, Docker images, or models. Skill discovery and summary are agent-native; the minimal Volcengine transport uses the commonly available `curl`. Python 3.10+ is only for optional helpers, not hub installation.
 
@@ -83,9 +83,9 @@ All agents share the same set of `SKILL.md` files — no duplicate maintenance. 
 - **Inconsistent summary quality**: Most "AI summary" tools only compress, losing interview arcs, human details, and underlying reasoning.
 - **Hard agent integration**: Traditional CLI tools lack clear input/output contracts and idempotent checks, making AI agent invocation error-prone.
 
-This project uses 9 independent sub-skills as a thin orchestration layer. Each skill has a clear `episode_dir` contract and idempotent checks, so AI agents can run end-to-end easily.
+This project uses 13 independent sub-skills as a thin orchestration layer. Each skill has clear `episode_dir` or `article_dir` contracts and idempotent checks, so AI agents can run end-to-end easily.
 
-> **This is not a single skill — it's a project repo bundling 9 skills.** AI agents auto-discover them on clone; no manual install or import needed.
+> **This is not a single skill — it's a project repo bundling 13 skills.** AI agents auto-discover them on clone; no manual install or import needed.
 
 </details>
 
@@ -126,9 +126,12 @@ The scheduler (`podcast-asr-scheduler`) tries each level in priority order; if a
 | YouTube | `youtube.com/watch?v=` / `youtu.be/` | yt-dlp subtitle first, fallback to ASR |
 | Bilibili | `bilibili.com/video/BV<id>` / `b23.tv/<id>` | yt-dlp subtitle first, fallback to ASR |
 | PodcastTranscript.ai | `podcasttranscript.ai/library/<slug>` | Public read-only REST API |
+| PodHood | `*.podhood.com` channel or filters | Public REST API using Python standard library |
+| WeChat | `mp.weixin.qq.com/s/...` | Article + metadata + optional local images; no automatic summary |
+| Public webpage/article RSS | Public HTTP(S) URL | Standard-library baseline; no automatic summary |
 | Amazon Music / Spotify exclusive | — | Not supported (DRM) |
 
-Adding a new source requires only writing a `scripts/<source>_fetch.py` and adding one row to the route table — other skills remain untouched.
+Prefer a self-contained script inside the owning skill; promote code to root `scripts/` only when multiple skills share it.
 
 </details>
 
@@ -139,7 +142,7 @@ Adding a new source requires only writing a `scripts/<source>_fetch.py` and addi
 podcast-summary/
 ├── AGENTS.md                             # Codex project-level config (AI agent entry)
 ├── CLAUDE.md                             # Claude Code / CodeBuddy project-level config (AI agent entry)
-├── .codebuddy/skills/                    # Skill source files (9 sub-skills, source of truth)
+├── .codebuddy/skills/                    # Skill source files (13 sub-skills, source of truth)
 │   ├── podcast-pipeline/SKILL.md         # Orchestrator
 │   ├── podcast-asr-scheduler/SKILL.md    # Transcription scheduler
 │   ├── podcast-fetch/SKILL.md            # URL → audio
@@ -148,7 +151,11 @@ podcast-summary/
 │   ├── podcast-transcribe/SKILL.md       # Local GPU ASR
 │   ├── volcengine-asr/SKILL.md           # Volcengine cloud ASR
 │   ├── podcast-transcript-fix/SKILL.md   # ASR error correction
-│   └── podcast-summary/SKILL.md          # Chinese deep summary
+│   ├── podcast-summary/SKILL.md          # Podcast transcript or article body → summary
+│   ├── wechat-to-md/                     # WeChat → article_dir
+│   ├── article-fetch/                    # Public webpage/RSS → article_dir
+│   ├── podhood-fetch/                    # PodHood → transcript
+│   └── article-pipeline/                 # Explicit fetch + summary only
 ├── .agents/skills/                       # Symlink → .codebuddy/skills (Codex discovery)
 ├── .claude/skills/                       # Symlink → .codebuddy/skills (Claude Code / CodeBuddy discovery)
 ├── scripts/                              # Source fetching + ASR scripts
@@ -184,6 +191,10 @@ podcast-summary/
 | 1c | `volcengine-asr` | Audio URL → transcript.md (Volcengine cloud, no GPU) |
 | 2a | `podcast-transcript-fix` | Fix ASR errors (English proper nouns, technical terms, mixed CN/EN) |
 | 2b | `podcast-summary` | Generate 5-section deep summary `{basename}.md` |
+| A1 | `wechat-to-md` | WeChat URL → article.md + README + optional images; no summary |
+| A2 | `article-fetch` | Public webpage/RSS → article.md + README; no summary |
+| T1 | `podhood-fetch` | PodHood → transcript.md + README + source.json |
+| A3 | `article-pipeline` | Fetch → summary only when explicitly requested |
 
 </details>
 

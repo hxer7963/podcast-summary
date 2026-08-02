@@ -2,9 +2,9 @@
 
 [English](./README_en.md) | **中文**
 
-Agent 友好的播客流水线：**抓取 → 转录（本地 GPU 或云端 ASR）→ 深度纪要**。
+Agent 友好的播客与文章知识库 skill hub：**抓取 → 按需转录 → 用户指定后生成深度纪要**。
 
-把一集播客或视频从 URL 自动变成一篇可独立阅读的中文深度纪要。支持多级信源抓取（官方文稿 / 平台字幕 / PodcastTranscript.ai 公共库 / 火山云 ASR / 本地 GPU ASR），按成本从低到高自动选择最优路径。
+把播客、视频、公开网页、RSS、微信公众号和 PodHood 文稿保存为结构化本地知识；播客端到端请求可自动生成纪要，文章默认只抓取，用户明确要求后才总结。支持多级信源抓取（官方文稿 / 平台字幕 / PodcastTranscript.ai 公共库 / 火山云 ASR / 本地 GPU ASR），按成本从低到高自动选择最优路径。
 
 > **AI agent 入口**：本仓库根目录有 `AGENTS.md`（Codex）和 `CLAUDE.md`（Claude Code / CodeBuddy），AI agent 打开仓库时应先读这两个文件之一。它们告诉 agent 这个仓库是什么、怎么用、有哪些约束。本文档是给人看的，那两个是给 agent 看的。
 
@@ -17,7 +17,7 @@ Agent 友好的播客流水线：**抓取 → 转录（本地 GPU 或云端 ASR�
 
 > 帮我安装 https://github.com/hxer7963/podcast-summary
 
-AI 助手（Codex / Claude Code / CodeBuddy）会自动 clone 仓库、运行 `install.sh`、发现 9 个 skill。无需编程知识。
+AI 助手（Codex / Claude Code / CodeBuddy）会自动 clone 仓库、运行 `install.sh`、发现 13 个 skill。无需编程知识。
 
 `install.sh` 默认是**零包安装**：不安装 uv、Python 包、ffmpeg、Docker 镜像或模型。Skill 发现和纪要由 agent 原生完成；火山云最小通信层只使用系统常见的 `curl`。Python 3.10+ 仅用于可选的抓取/自动轮询助手，不是 hub 的安装前提。
 
@@ -83,9 +83,9 @@ Agent 自动运行完整流水线：抓取 → 转录 → 纪要。ASR 后端自
 - **纪要质量参差**：大多数 "AI summary" 工具只做压缩，丢失访谈弧线、人物细节和底层推理
 - **Agent 集成难**：传统 CLI 工具缺少清晰的输入输出契约和幂等检查，AI agent 调用容易出错
 
-本项目用 9 个独立子 skill 组成薄编排层，每个 skill 都有明确的 `episode_dir` 契约和幂等检查，AI agent 可以轻松端到端调用。
+本项目用 13 个独立子 skill 组成薄编排层，每个 skill 都有明确的 `episode_dir` 或 `article_dir` 契约和幂等检查，AI agent 可以轻松端到端调用。
 
-> **这不是一个单独的 skill，而是一个包含 9 个 skill 的项目仓库。** AI agent clone 后自动发现这些 skill，无需手动安装或导入。
+> **这不是一个单独的 skill，而是一个包含 13 个 skill 的项目仓库。** AI agent clone 后自动发现这些 skill，无需手动安装或导入。
 
 </details>
 
@@ -126,9 +126,12 @@ URL
 | YouTube | `youtube.com/watch?v=` / `youtu.be/` | yt-dlp 字幕优先，无字幕走 ASR |
 | Bilibili | `bilibili.com/video/BV<id>` / `b23.tv/<id>` | yt-dlp 字幕优先，无字幕走 ASR |
 | PodcastTranscript.ai | `podcasttranscript.ai/library/<slug>` | 公共只读 REST API |
+| PodHood | `*.podhood.com` 频道/筛选条件 | 公开 REST API，标准库下载完整文稿 |
+| 微信公众号 | `mp.weixin.qq.com/s/...` | 标准库抓正文与可选本地图片；默认不总结 |
+| 公开网页/RSS 文章 | 任意公开 HTTP(S) URL | 标准库基线抓取；默认不总结 |
 | Amazon Music / Spotify 独占 | — | 不支持（DRM） |
 
-新增源只需写一个 `scripts/<source>_fetch.py` 并在路由表加一行，其他 skill 完全不动。
+新增源优先作为所属 skill 的自包含脚本增量扩展；只有多 skill 共享的逻辑才放入根 `scripts/`。
 
 </details>
 
@@ -139,7 +142,7 @@ URL
 podcast-summary/
 ├── AGENTS.md                             # Codex 项目级配置 (AI agent 入口)
 ├── CLAUDE.md                             # Claude Code / CodeBuddy 项目级配置 (AI agent 入口)
-├── .codebuddy/skills/                    # Skill 源文件 (9 个子 skill, 真相源)
+├── .codebuddy/skills/                    # Skill 源文件 (13 个子 skill, 真相源)
 │   ├── podcast-pipeline/SKILL.md         # 编排器
 │   ├── podcast-asr-scheduler/SKILL.md    # 转录调度大脑
 │   ├── podcast-fetch/SKILL.md            # URL → 音频
@@ -148,7 +151,11 @@ podcast-summary/
 │   ├── podcast-transcribe/SKILL.md       # 本地 GPU ASR
 │   ├── volcengine-asr/SKILL.md           # 火山云 ASR
 │   ├── podcast-transcript-fix/SKILL.md   # ASR 校验
-│   └── podcast-summary/SKILL.md          # 中文深度纪要
+│   ├── podcast-summary/SKILL.md          # 播客 transcript 或文章 article → 中文纪要
+│   ├── wechat-to-md/                     # 微信文章 → article_dir（标准库）
+│   ├── article-fetch/                    # 公开网页/RSS → article_dir（标准库基线）
+│   ├── podhood-fetch/                    # PodHood → transcript（标准库）
+│   └── article-pipeline/                 # 仅显式请求时 fetch → summary
 ├── .agents/skills/                       # Symlink → .codebuddy/skills (Codex 发现)
 ├── .claude/skills/                       # Symlink → .codebuddy/skills (Claude Code / CodeBuddy 发现)
 ├── scripts/                              # 信源抓取 + ASR 脚本
@@ -184,6 +191,10 @@ podcast-summary/
 | 1c | `volcengine-asr` | audio URL → transcript.md（火山云，无需 GPU） |
 | 2a | `podcast-transcript-fix` | 修正 ASR 错误（英文专名、技术术语、中英混杂） |
 | 2b | `podcast-summary` | 生成五段式详尽纪要 `{basename}.md` |
+| A1 | `wechat-to-md` | 微信公众号 URL → article.md + README + 可选图片；不自动总结 |
+| A2 | `article-fetch` | 公开网页/RSS → article.md + README；不自动总结 |
+| T1 | `podhood-fetch` | PodHood 公开文稿 → transcript.md + README + source.json |
+| A3 | `article-pipeline` | 仅在用户明确要求时编排文章抓取 → summary |
 
 </details>
 

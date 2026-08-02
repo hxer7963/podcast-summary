@@ -1,0 +1,4 @@
+interface:
+  display_name: "PodHood 文稿抓取"
+  short_description: "用标准库搜索并下载 PodHood 的完整播客转录文稿"
+  default_prompt: "Use $podhood-fetch to find and download matching PodHood transcripts."

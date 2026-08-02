@@ -19,6 +19,7 @@ URL → podcast-asr-scheduler → episode_dir/transcript.md
 |---|---|---|
 | `podcast-asr-scheduler` | 选择最低成本转录路径 | Bash |
 | `podcasttranscript-fetch` | 公共库文字稿 | Python 标准库 |
+| `podhood-fetch` | PodHood 公开完整文稿 | Python 标准库 |
 | `podcast-fetch` | 普通播客元数据/音频 | 小宇宙为标准库；其他源按需 fetch 组 |
 | `subtitle-fetch` | YouTube/Bilibili 字幕 | 按需 subtitle 组 |
 | `volcengine-asr` | 公网 audio URL → transcript/result JSON | curl + API key |
@@ -53,24 +54,25 @@ bash scripts/check_capabilities.sh --json
 
 - `bash install.sh --with-fetch`：仅 RSS / Apple / Spotify
 - `bash install.sh --with-subtitle`：仅 YouTube / Bilibili
-- 默认安装、火山云、summary、小宇宙元数据、PodcastTranscript：不运行 uv
+- 默认安装、火山云、summary、小宇宙元数据、PodcastTranscript、PodHood、公开文章和微信：不运行 uv
 
 ### 2. 路由到 transcript
 
 1. 已给 `episode_dir/transcript.md`：保持幂等，直接进入第 3 步。
 2. PodcastTranscript URL/topic：调用 `podcasttranscript-fetch`。
-3. YouTube/Bilibili：调用 `subtitle-fetch`；仅此时安装 subtitle 组。
-4. 公网音频 URL + 火山 key：直接调用 `volcengine-asr`，不 fetch、不下载音频。
-5. 普通播客 URL：优先官方 transcript；需要火山 ASR 时只解析公网 Audio URL，不下载音频。
-6. 云路径不可用且本机确有 GPU：按 scheduler 的 Level 2 确认流程下载本地音频和约 20GB ASR 资产。
-7. 无云 key 且无 GPU：停止并提示用户提供 `VOLC_ASR_API_KEY`；不要安装本地 GPU 依赖。
+3. PodHood URL、频道或筛选条件：调用 `podhood-fetch`。
+4. YouTube/Bilibili：调用 `subtitle-fetch`；仅此时安装 subtitle 组。
+5. 公网音频 URL + 火山 key：直接调用 `volcengine-asr`，不 fetch、不下载音频。
+6. 普通播客 URL：优先官方 transcript；需要火山 ASR 时只解析公网 Audio URL，不下载音频。
+7. 云路径不可用且本机确有 GPU：按 scheduler 的 Level 2 确认流程下载本地音频和约 20GB ASR 资产。
+8. 无云 key 且无 GPU：停止并提示用户提供 `VOLC_ASR_API_KEY`；不要安装本地 GPU 依赖。
 
 ### 3. 来源后处理
 
 | transcript 来源 | 默认处理 |
 |---|---|
 | 人工官方字幕 | 直接 summary |
-| PodcastTranscript / 自动字幕 | transcript-fix → summary |
+| PodcastTranscript / PodHood / 自动字幕 | transcript-fix → summary |
 | 火山云 | 直接 summary；需要时可校对专名 |
 | 本地 VibeVoice | transcript-fix → summary |
 

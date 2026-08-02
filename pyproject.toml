@@ -1,7 +1,7 @@
 [project]
 name = "podcast-summary"
 version = "0.1.0"
-description = "Agent-friendly podcast pipeline: fetch → transcribe (local GPU or cloud ASR) → deep summary"
+description = "Agent-friendly podcast and article knowledge hub with atomic fetch, transcribe, and summary skills"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }

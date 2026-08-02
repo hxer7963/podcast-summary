@@ -46,6 +46,9 @@ scripts/cookies.*.txt
 audios/
 output/
 
+# Fetched article knowledge base (output of article-fetch / wechat-to-md, not source)
+articles/
+
 # vibevoice-asr local artifacts
 vibevoice-asr/.venv/
 vibevoice-asr/__pycache__/

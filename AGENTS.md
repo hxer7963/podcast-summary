@@ -4,7 +4,7 @@ This file is read by Codex when it opens this repository. It tells the agent wha
 
 ## What this project is
 
-`podcast-summary` is **a project repo bundling 9 skills** (not a single skill). It turns a podcast or video URL into a Chinese deep-summary markdown file. Pipeline: **fetch → transcribe → summary**. Each stage is a self-contained skill with an `episode_dir` handoff contract and idempotent checks.
+`podcast-summary` is **a project repo bundling 13 skills** (not a single skill). It builds local knowledge from podcast, video, public article, WeChat, and PodHood sources, then generates a Chinese deep summary only when the user requests one. Podcast pipeline: **fetch → transcribe → summary**; article fetch stays fetch-only unless summary is explicit. Each stage is atomic, portable, and idempotent.
 
 AI agents auto-discover the skills from `.agents/skills/` on clone — no manual import needed.
 
@@ -41,9 +41,13 @@ Codex scans `.agents/skills/*/SKILL.md` (symlinked to `.codebuddy/skills/`). Eac
 | `podcast-transcribe` | "转录", "transcribe", episode_dir with audio | Audio → transcript.md (local GPU, has speaker tags) |
 | `volcengine-asr` | "火山云转录", VOLC_ASR_API_KEY set | Audio URL → transcript.md (cloud, no GPU) |
 | `podcast-transcript-fix` | "修正转录", "fix transcript" | Fix ASR proper-noun errors in-place |
-| `podcast-summary` | "生成纪要", "summarize this episode" | transcript.md → {basename}.md (5-section Chinese summary) |
+| `podcast-summary` | "生成纪要", "summarize this episode/article" | transcript.md 或 article.md → {basename}.md (5-section Chinese summary) |
+| `wechat-to-md` | WeChat public article URL, "抓公众号文章" | WeChat URL → article_dir (article + metadata + optional images); no summary |
+| `article-fetch` | public article/RSS URL, "抓取文章" | Web/RSS → article_dir; no summary |
+| `podhood-fetch` | *.podhood.com, "抓取十分吸引转录" | PodHood REST → episode_dir with transcript |
+| `article-pipeline` | explicit "抓取并总结文章" | Thin fetch → summary orchestration |
 
-The agent should usually invoke `podcast-pipeline` and let it dispatch to sub-skills. Direct sub-skill invocation is for resume/checkpoint scenarios only.
+For podcast/video end-to-end requests, invoke `podcast-pipeline`. For article or WeChat knowledge-base requests, invoke only the matching fetch skill and stop. Invoke `article-pipeline` only when the user explicitly asks for both fetch and summary.
 
 ## Directory layout
 
@@ -52,7 +56,8 @@ podcast-summary/
 ├── .codebuddy/skills/      # Source of truth for skills (SKILL.md files)
 ├── .agents/skills/         # Symlink → .codebuddy/skills (Codex discovery)
 ├── .claude/skills/         # Symlink → .codebuddy/skills (Claude Code / CodeBuddy discovery)
-├── scripts/                # Fetch + ASR Python scripts (called by skills)
+├── scripts/                # Shared podcast + ASR scripts
+├── .codebuddy/skills/<name>/scripts/ # Portable source-specific scripts when needed
 ├── vibevoice-asr/          # Local GPU ASR engine (VibeVoice-ASR via vLLM)
 ├── docker/                  # Dockerfile for the vLLM serving image
 ├── setup/                   # Model download scripts
@@ -62,7 +67,7 @@ podcast-summary/
 └── audios/                  # Output directory (gitignored)
 ```
 
-The `episode_dir` is the universal handoff contract. Every skill takes an `episode_dir` (absolute path) and adds files to it:
+Podcast and article sources use parallel absolute-directory contracts:
 
 ```
 episode_dir/
@@ -72,13 +77,21 @@ episode_dir/
 └── {basename}.md       # Final summary (from podcast-summary)
 ```
 
+```
+article_dir/
+├── README.md           # Article metadata
+├── article.md          # Single source of truth for article body
+├── images/             # Optional, primarily WeChat
+└── {basename}.md       # Only when summary is explicitly requested
+```
+
 ## Capability-first environment routing
 
 Run `bash scripts/check_capabilities.sh --json` before choosing a path. Do not install a capability merely because it is missing.
 
 - Skill discovery and summary: no local runtime packages.
 - Direct-audio Volcengine transport: curl only; jq is optional because the agent can read `volc-response.json`.
-- PodcastTranscript fetch and Xiaoyuzhou metadata helpers: Python 3.10+ standard library only.
+- PodcastTranscript, PodHood, public article, WeChat, and Xiaoyuzhou lightweight helpers: Python 3.10+ standard library only.
 - RSS/Apple/Spotify fetch: install only on demand with `bash install.sh --with-fetch`.
 - YouTube/Bilibili subtitles: install only on demand with `bash install.sh --with-subtitle`; ffmpeg is not required for subtitle-only work.
 - Local GPU ASR: requires GPU + Docker + ffmpeg and follows the confirmed lazy-loading flow. Never install this path on a no-GPU machine.
@@ -94,6 +107,12 @@ When a user gives a URL or says "处理这集播客":
    - Local GPU ASR as fallback
 3. After transcript.md is ready, `podcast-summary` generates `{basename}.md`.
 4. The pipeline ends at summary. No archive / push stages in this repo.
+
+For a public article or WeChat URL:
+
+1. Invoke `article-fetch` or `wechat-to-md` and build `article_dir`.
+2. Stop after fetch unless the user explicitly requests a summary.
+3. If summary is explicit, invoke `podcast-summary`, which reads `article.md + README.md`.
 
 **Do not** call scripts directly (e.g., `bash scripts/transcribe.sh`). Always go through the skill, which has idempotent checks and validation.
 
@@ -111,6 +130,6 @@ If unsure whether the environment is ready, run `bash scripts/check_capabilities
 
 ## Extending
 
-- **New podcast source**: Write `scripts/<source>_fetch.py` (must print `✓ Episode complete: <dir>`), add a row to `podcast-fetch` SKILL.md route table. Other skills unchanged.
+- **New podcast source**: Add the smallest self-contained script under the owning skill when possible; use shared `scripts/<source>_fetch.py` only when multiple skills consume it (must print `✓ Episode complete: <dir>`), add a row to `podcast-fetch` SKILL.md route table. Other skills unchanged.
 - **New ASR backend**: Write a new `<backend>-asr` skill, add a priority node to `podcast-asr-scheduler` decision tree.
 - **Downstream stages** (archive / push): This repo ends at summary. Add new skills after `podcast-summary` if you need archiving, tagging, or publishing.
